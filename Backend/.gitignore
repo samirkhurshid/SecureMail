@@ -1,0 +1,35 @@
+# ── Secrets — NEVER commit real API keys ──────────────────────────
+.env
+
+# ── Python ────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+
+# ── Virtual environments ──────────────────────────────────────────
+venv/
+.venv/
+env/
+ENV/
+
+# ── Testing ───────────────────────────────────────────────────────
+.pytest_cache/
+.coverage
+htmlcov/
+*.xml
+
+# ── Forensics logs (may contain sensitive email data) ─────────────
+forensics_logs/
+
+# ── IDE ───────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo

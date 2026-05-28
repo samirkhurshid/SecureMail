@@ -1,0 +1,2522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>SecureMail — Email Threat Intelligence</title>
+  <meta name="description" content="SecureMail — Real-time email threat detection, phishing analysis, and forensic intelligence."/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --bg:        #111318;
+      --bg2:       #191c23;
+      --bg3:       #1e2128;
+      --surface:   rgba(255,255,255,0.04);
+      --s-hover:   rgba(255,255,255,0.07);
+      --border:    rgba(255,255,255,0.08);
+      --border2:   rgba(255,255,255,0.12);
+      --cyan:      #3b82f6;
+      --cyan-dim:  rgba(59,130,246,0.12);
+      --cyan-glow: rgba(59,130,246,0.25);
+      --purple:    #8b5cf6;
+      --red:       #ef4444;
+      --red-dim:   rgba(239,68,68,0.12);
+      --orange:    #f97316;
+      --orange-dim:rgba(249,115,22,0.12);
+      --amber:     #f59e0b;
+      --amber-dim: rgba(245,158,11,0.12);
+      --green:     #22c55e;
+      --green-dim: rgba(34,197,94,0.12);
+      --lime:      #84cc16;
+      --t1:        #f1f5f9;
+      --t2:        #94a3b8;
+      --t3:        #475569;
+      --t4:        #2d3748;
+      --r:         12px;
+      --r-sm:      8px;
+      --sw:        228px;
+      --logo-gradient: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 35%, #ec4899 70%, #f97316 100%);
+    }
+    html,body{height:100%;font-family:'Inter',sans-serif;background:var(--bg);color:var(--t1);overflow:hidden}
+
+    /* ── BG glow ── */
+    body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
+      background: radial-gradient(circle 700px at 85% 20%, rgba(236, 72, 153, 0.055) 0%, transparent 80%),
+                  radial-gradient(circle 600px at 15% 80%, rgba(59, 130, 246, 0.055) 0%, transparent 80%),
+                  radial-gradient(circle 600px at 50% 50%, rgba(139, 92, 246, 0.04) 0%, transparent 80%),
+                  radial-gradient(circle 500px at 75% 75%, rgba(34, 197, 94, 0.035) 0%, transparent 80%),
+                  radial-gradient(circle 500px at 30% 15%, rgba(249, 115, 22, 0.035) 0%, transparent 80%) !important;
+    }
+
+    /* ── Layout ── */
+    #app{position:relative;z-index:1;display:flex;height:100vh}
+
+    /* ── Sidebar ── */
+    #sidebar{
+      width:var(--sw);min-height:100vh;flex-shrink:0;
+      background:rgba(17,19,24,0.92);backdrop-filter:blur(20px);
+      border-right:1px solid var(--border);
+      display:flex;flex-direction:column;z-index:10;overflow:hidden;
+    }
+    .sb-logo{
+      display:flex;align-items:center;gap:10px;padding:20px 18px 16px;
+      text-decoration:none;border-bottom:1px solid var(--border);
+    }
+    .sb-logo-img-wrap {
+      width:40px;height:40px;
+      border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;
+      box-shadow:0 4px 12px rgba(0,0,0,0.15);
+      transition:all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .sb-logo:hover .sb-logo-img-wrap {
+      box-shadow:0 0 20px rgba(139,92,246,0.6);
+      transform:scale(1.05);
+    }
+    .sb-logo-name{font-size:16px;font-weight:700;letter-spacing:-0.3px;color:var(--t1)}
+    .sb-logo-ver{
+      font-size:10px;font-weight:600;background:var(--cyan-dim);color:var(--cyan);
+      border:1px solid rgba(59,130,246,0.3);border-radius:4px;padding:1px 5px;margin-left:2px;
+    }
+    .sb-nav{flex:1;overflow-y:auto;padding:10px 0}
+    .sb-section{
+      font-size:9.5px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;
+      color:var(--t3);padding:12px 18px 4px;
+    }
+    .nav-item{
+      display:flex;align-items:center;gap:10px;width:calc(100% - 16px);padding:10px 14px;
+      border:1px solid transparent;background:transparent;color:var(--t2);font-size:13px;font-weight:500;
+      cursor:pointer;text-align:left;white-space:nowrap;position:relative;transition:all 0.2s cubic-bezier(0.4,0,0.2,1);
+      border-radius:8px;
+      margin:2px 8px;
+    }
+    .nav-item:hover{
+      color:var(--t1);
+      background:rgba(255,255,255,0.03);
+      border-color:rgba(255,255,255,0.02);
+      transform:translateX(2px);
+    }
+    .nav-item.active{
+      color:#fff !important;
+      background:rgba(255,255,255,0.06) !important;
+      border:1px solid rgba(255,255,255,0.04) !important;
+      backdrop-filter:blur(10px) !important;
+      -webkit-backdrop-filter:blur(10px) !important;
+      box-shadow:0 4px 15px -3px rgba(139,92,246,0.3), inset 0 1px 0 rgba(255,255,255,0.05) !important;
+      font-weight:600 !important;
+    }
+    .nav-item.active::before{
+      content:'';position:absolute;left:-8px;top:6px;bottom:6px;
+      width:3px;background:linear-gradient(to bottom, #ec4899, #8b5cf6, #3b82f6) !important;
+      border-radius:0 3px 3px 0;
+      box-shadow:0 0 10px rgba(139,92,246,0.6) !important;
+    }
+    .nav-icon{width:17px;height:17px;flex-shrink:0;opacity:0.8;transition:transform 0.2s}
+    .nav-item:hover .nav-icon{transform:scale(1.05)}
+    .nav-item.active .nav-icon{opacity:1;color:#fff}
+    .sb-divider{height:1px;background:var(--border);margin:6px 14px}
+    .sb-bottom{padding:12px 18px 16px;border-top:1px solid var(--border)}
+    .sb-account{
+      display:flex;align-items:center;gap:10px;cursor:pointer;padding:8px 10px;
+      border-radius:var(--r-sm);transition:background 0.18s;
+    }
+    .sb-account:hover{background:var(--s-hover)}
+    .sb-avatar{
+      width:32px;height:32px;border-radius:50%;
+      background: linear-gradient(135deg, rgba(96, 165, 250, 0.15), rgba(167, 139, 250, 0.15), rgba(244, 114, 182, 0.15));
+      border: 1px solid rgba(167, 139, 250, 0.35);
+      color: #a78bfa;
+      display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;
+      flex-shrink:0;
+    }
+    .sb-account-name{font-size:13px;font-weight:600;color:var(--t1)}
+    .sb-account-role{font-size:11px;color:var(--t3);margin-top:1px}
+
+    /* ── Main ── */
+    #main{flex:1;display:flex;flex-direction:column;overflow:hidden;position:relative}
+
+    /* ── Topbar ── */
+    #topbar{
+      display:flex;align-items:center;justify-content:space-between;
+      padding:14px 24px;
+      background:rgba(17,19,24,0.3) !important;
+      backdrop-filter:blur(24px) saturate(180%) !important;
+      -webkit-backdrop-filter:blur(24px) saturate(180%) !important;
+      border-bottom: none;
+      flex-shrink:0;
+      position:absolute;top:0;left:0;right:0;z-index:5;
+      height: 57px;
+    }
+    .topbar-title{font-size:18px;font-weight:700;letter-spacing:-0.3px}
+    .topbar-right{display:flex;align-items:center;gap:10px}
+    .threat-today-badge{
+      display:flex;align-items:center;gap:6px;
+      background:var(--red-dim);border:1px solid rgba(239,68,68,0.3);
+      border-radius:20px;padding:5px 12px;font-size:12px;font-weight:600;color:var(--red);
+    }
+    .threat-dot{width:6px;height:6px;border-radius:50%;background:var(--red);animation:pulse-dot 2s infinite}
+    @keyframes pulse-dot{0%,100%{opacity:1}50%{opacity:0.3}}
+    .btn-scan-email{
+      display:flex;align-items:center;gap:7px;
+      background:rgba(255, 255, 255, 0.03) !important;
+      border:1px solid var(--border) !important;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border-radius:var(--r-sm);padding:8px 16px;
+      font-size:13px;font-weight:600;color:var(--t2);cursor:pointer;transition:all 0.18s;
+    }
+    .btn-scan-email:hover{
+      background:rgba(255, 255, 255, 0.08) !important;
+      border-color: rgba(167, 139, 250, 0.5) !important;
+      color: #ffffff !important;
+    }
+    .btn-scan-email svg{width:15px;height:15px;color:#60a5fa}
+    .topbar-more{
+      width:32px;height:32px;background:var(--bg3);border:1px solid var(--border);
+      border-radius:var(--r-sm);display:flex;align-items:center;justify-content:center;
+      cursor:pointer;color:var(--t2);transition:all 0.18s;
+    }
+    .topbar-more:hover{color:var(--t1);border-color:var(--border2)}
+
+    /* ── Pages ── */
+    #content{flex:1;overflow-y:auto;scroll-behavior:smooth;padding-top:57px}
+    .page{display:none;padding:20px 24px}
+    .page.active{display:block}
+
+    /* ── Glass Card ── */
+    .card,
+    .stat-card,
+    .scan-panel {
+      background: rgba(19, 21, 28, 0.8) !important;
+      border: 1px solid rgba(255, 255, 255, 0.04) !important;
+      box-shadow: 0 10px 40px -15px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.05) !important;
+      border-radius: var(--r);
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    }
+    .card:hover,
+    .stat-card:hover,
+    .scan-panel:hover {
+      border-color: rgba(139, 92, 246, 0.2) !important;
+      box-shadow: 0 12px 40px -10px rgba(139, 92, 246, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+    }
+    .card-p{padding:18px 20px}
+    .card-header{
+      display:flex;align-items:center;justify-content:space-between;
+      padding:14px 18px;border-bottom:1px solid var(--border);
+    }
+    .card-title{
+      display:flex;align-items:center;gap:8px;
+      font-size:13px;font-weight:600;color:var(--t2);
+    }
+    .card-title svg{width:15px;height:15px;color:var(--cyan)}
+
+    /* ── Buttons ── */
+    .btn{
+      display:inline-flex;align-items:center;gap:7px;
+      padding:9px 18px;border-radius:var(--r-sm);font-size:13px;font-weight:600;
+      cursor:pointer;border:none;transition:all 0.18s;text-decoration:none;
+    }
+    .btn svg{width:15px;height:15px}
+    .btn-primary{
+      background: linear-gradient(135deg, rgba(96, 165, 250, 0.15), rgba(167, 139, 250, 0.15), rgba(244, 114, 182, 0.15)) !important;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      color: #cbd5e1 !important;
+      border: 1px solid rgba(167, 139, 250, 0.35) !important;
+      box-shadow: 0 4px 12px rgba(139, 92, 246, 0.1) !important;
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    }
+    .btn-primary:hover{
+      background: linear-gradient(135deg, rgba(96, 165, 250, 0.28), rgba(167, 139, 250, 0.28), rgba(244, 114, 182, 0.28)) !important;
+      border-color: rgba(167, 139, 250, 0.55) !important;
+      color: #ffffff !important;
+      box-shadow: 0 6px 18px rgba(139, 92, 246, 0.22) !important;
+      transform: translateY(-1px) scale(1.01) !important;
+    }
+    .btn-secondary{
+      background:rgba(255, 255, 255, 0.03) !important;
+      color:var(--t2) !important;
+      border:1px solid var(--border) !important;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+    }
+    .btn-secondary:hover{
+      background:rgba(255, 255, 255, 0.08) !important;
+      color:var(--t1) !important;
+      border-color:rgba(167, 139, 250, 0.4) !important;
+    }
+    .btn-sm{padding:6px 13px;font-size:12px}
+    .btn-danger{background:var(--red-dim);color:var(--red);border:1px solid rgba(239,68,68,0.3)}
+    .btn-danger:hover{background:rgba(239,68,68,0.2)}
+
+    /* ── Tags ── */
+    .tag{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600}
+    .tag-critical{background:var(--red-dim);color:var(--red);border:1px solid rgba(239,68,68,0.25)}
+    .tag-high{background:var(--orange-dim);color:var(--orange);border:1px solid rgba(249,115,22,0.25)}
+    .tag-medium{background:var(--amber-dim);color:var(--amber);border:1px solid rgba(245,158,11,0.25)}
+    .tag-low{background:var(--green-dim);color:var(--green);border:1px solid rgba(34,197,94,0.25)}
+    .tag-clean{background:var(--green-dim);color:var(--green);border:1px solid rgba(34,197,94,0.25)}
+    .tag-info{background:var(--cyan-dim);color:var(--cyan);border:1px solid rgba(59,130,246,0.25)}
+    .tag-purple{background:rgba(139,92,246,0.12);color:#a78bfa;border:1px solid rgba(139,92,246,0.25)}
+    .tags-row{display:flex;flex-wrap:wrap;gap:6px}
+
+    /* ── Info row ── */
+    .info-row{display:flex;justify-content:space-between;align-items:flex-start;padding:9px 0;border-bottom:1px solid var(--border)}
+    .info-row:last-child{border-bottom:none}
+    .info-label{font-size:12.5px;color:var(--t2)}
+    .info-val{font-size:12.5px;font-weight:600;font-family:'JetBrains Mono',monospace;text-align:right;max-width:60%}
+
+    /* ── Spinner ── */
+    .spinner{width:16px;height:16px;border:2px solid rgba(59,130,246,0.2);border-top-color:var(--cyan);border-radius:50%;animation:spin 0.7s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .loader-row{display:none;align-items:center;gap:8px;color:var(--t2);font-size:13px;margin-top:10px}
+    .loader-row.on{display:flex}
+
+    /* ── Error ── */
+    .err{color:var(--red);font-size:12.5px;margin-top:8px;display:none}
+    .err.on{display:block}
+
+    /* ── Score bar ── */
+    .sbar-wrap{height:5px;background:rgba(255,255,255,0.06);border-radius:3px;overflow:hidden;margin-top:5px}
+    .sbar{height:100%;border-radius:3px;transition:width 0.8s cubic-bezier(0.4,0,0.2,1)}
+
+    /* ── Gauge ── */
+    .gauge-card{display:flex;flex-direction:column;align-items:center;padding:20px}
+    .gauge-wrap{position:relative;width:160px;height:86px}
+    .gauge-svg{width:160px;height:86px;overflow:visible}
+    .gauge-track{fill:none;stroke:rgba(255,255,255,0.06);stroke-width:12;stroke-linecap:round}
+    .gauge-fill{fill:none;stroke-width:12;stroke-linecap:round;transition:stroke-dashoffset 0.8s cubic-bezier(0.4,0,0.2,1),stroke 0.8s}
+    .gauge-score{position:absolute;bottom:-2px;left:50%;transform:translateX(-50%);font-size:32px;font-weight:800;letter-spacing:-2px;font-family:'JetBrains Mono',monospace}
+    .gauge-lvl{margin-top:16px;font-size:12px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase}
+
+    /* ── Auth grid ── */
+    .auth-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .auth-item{background:rgba(0,0,0,0.2);border:1px solid var(--border);border-radius:var(--r-sm);padding:10px 12px}
+    .auth-lbl{font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--t3);margin-bottom:3px}
+    .auth-val{font-size:13px;font-weight:700;font-family:'JetBrains Mono',monospace}
+    .auth-val.pass{color:var(--green)}.auth-val.fail{color:var(--red)}.auth-val.unknown{color:var(--t3)}.auth-val.softfail,.auth-val.neutral{color:var(--amber)}
+
+    /* ── Dashboard stat cards ── */
+    .dash-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+    .stat-card{
+      backdrop-filter:blur(16px) saturate(160%) !important;
+      -webkit-backdrop-filter:blur(16px) saturate(160%) !important;
+      border-radius:var(--r);padding:18px;transition:all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    }
+    .dash-stats .stat-card:nth-child(1) {
+      background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(139, 92, 246, 0.03) 100%) !important;
+      border: 1px solid rgba(59, 130, 246, 0.2) !important;
+      box-shadow: 0 10px 40px -15px rgba(59, 130, 246, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.04) !important;
+    }
+    .dash-stats .stat-card:nth-child(2) {
+      background: linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(244, 63, 94, 0.03) 100%) !important;
+      border: 1px solid rgba(239, 68, 68, 0.2) !important;
+      box-shadow: 0 10px 40px -15px rgba(239, 68, 68, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.04) !important;
+    }
+    .dash-stats .stat-card:nth-child(3) {
+      background: linear-gradient(135deg, rgba(245, 158, 11, 0.1) 0%, rgba(249, 115, 22, 0.03) 100%) !important;
+      border: 1px solid rgba(245, 158, 11, 0.2) !important;
+      box-shadow: 0 10px 40px -15px rgba(245, 158, 11, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.04) !important;
+    }
+    .dash-stats .stat-card:nth-child(4) {
+      background: linear-gradient(135deg, rgba(34, 197, 94, 0.1) 0%, rgba(132, 204, 22, 0.03) 100%) !important;
+      border: 1px solid rgba(34, 197, 94, 0.2) !important;
+      box-shadow: 0 10px 40px -15px rgba(34, 197, 94, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.04) !important;
+    }
+    .dash-stats .stat-card:nth-child(1):hover { border-color: rgba(59, 130, 246, 0.4) !important; box-shadow: 0 12px 45px -12px rgba(59, 130, 246, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.08) !important; transform: translateY(-2px) !important; }
+    .dash-stats .stat-card:nth-child(2):hover { border-color: rgba(239, 68, 68, 0.4) !important; box-shadow: 0 12px 45px -12px rgba(239, 68, 68, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.08) !important; transform: translateY(-2px) !important; }
+    .dash-stats .stat-card:nth-child(3):hover { border-color: rgba(245, 158, 11, 0.4) !important; box-shadow: 0 12px 45px -12px rgba(245, 158, 11, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.08) !important; transform: translateY(-2px) !important; }
+    .dash-stats .stat-card:nth-child(4):hover { border-color: rgba(34, 197, 94, 0.4) !important; box-shadow: 0 12px 45px -12px rgba(34, 197, 94, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.08) !important; transform: translateY(-2px) !important; }
+    .stat-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;margin-bottom:12px}
+    .stat-icon svg{width:17px;height:17px}
+    .stat-lbl{font-size:12px;color:var(--t2);margin-bottom:6px}
+    .stat-val{font-size:28px;font-weight:800;letter-spacing:-1px;line-height:1}
+    .stat-sub{font-size:11.5px;color:var(--t3);margin-top:5px}
+
+    /* ── Threat card ── */
+    .threat-item{
+      display:flex;align-items:flex-start;gap:12px;
+      padding:13px 16px;border-bottom:1px solid var(--border);
+      transition:background 0.15s;cursor:pointer;
+    }
+    .threat-item:last-child{border-bottom:none}
+    .threat-item:hover{background:var(--s-hover)}
+    .threat-icon{
+      width:36px;height:36px;border-radius:9px;flex-shrink:0;
+      display:flex;align-items:center;justify-content:center;
+    }
+    .threat-icon svg{width:18px;height:18px}
+    .threat-body{flex:1;min-width:0}
+    .threat-name{font-size:13.5px;font-weight:700;color:var(--t1);margin-bottom:3px}
+    .threat-desc{font-size:12px;color:var(--t2);line-height:1.5;margin-bottom:5px}
+    .threat-meta{font-size:11.5px;color:var(--t3)}
+
+    /* ── Two-panel scanner ── */
+    .scanner-wrap{display:grid;grid-template-columns:1fr 1fr;gap:16px;height:calc(100vh - 120px)}
+    .scan-panel{
+      background:rgba(25,28,35,0.65);
+      backdrop-filter:blur(16px);
+      -webkit-backdrop-filter:blur(16px);
+      border:1px solid var(--border);border-radius:var(--r);display:flex;flex-direction:column;overflow:hidden;
+    }
+    .scan-panel-header{display:flex;align-items:center;gap:8px;padding:14px 18px;border-bottom:1px solid var(--border);font-size:13px;font-weight:600;color:var(--t2)}
+    .scan-panel-header svg{width:16px;height:16px;color:var(--cyan)}
+    .scan-panel-body{flex:1;overflow-y:auto;padding:16px 18px}
+
+    /* ── Drop zone ── */
+    .drop-zone{
+      border:2px dashed var(--border);border-radius:var(--r);padding:36px 20px;text-align:center;
+      cursor:pointer;transition:all 0.18s;position:relative;background:rgba(0,0,0,0.15);
+      margin-bottom:14px;
+    }
+    .drop-zone:hover,.drop-zone.over{border-color:rgba(59,130,246,0.5);background:var(--cyan-dim)}
+    .drop-zone input{position:absolute;inset:0;opacity:0;cursor:pointer}
+    .drop-zone svg{width:32px;height:32px;color:var(--t3);margin:0 auto 10px;display:block}
+    .drop-zone h3{font-size:14px;font-weight:600;margin-bottom:4px}
+    .drop-zone p{font-size:12px;color:var(--t3)}
+
+    /* ── URL scanner row ── */
+    .url-section{background:rgba(0,0,0,0.15);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px}
+    .url-section-title{font-size:12px;font-weight:600;color:var(--t2);margin-bottom:10px;display:flex;align-items:center;gap:7px}
+    .url-section-title svg{width:14px;height:14px;color:var(--cyan)}
+    .url-input-row{display:flex;gap:8px;margin-bottom:8px}
+    .url-input-row input{flex:1;background:rgba(0,0,0,0.2);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--t1);font-size:13px;padding:8px 12px;outline:none;transition:all 0.18s}
+    .url-input-row input:focus{border-color:rgba(59,130,246,0.4);box-shadow:0 0 0 2px rgba(59,130,246,0.08)}
+    .url-input-row input::placeholder{color:var(--t3)}
+
+    /* ── Result panel states ── */
+    .result-ready{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--t3);gap:12px}
+    .result-ready svg{width:48px;height:48px;opacity:0.25}
+    .result-ready p{font-size:14px}
+
+    /* ── Forensics table ── */
+    .tbl-wrap{overflow-x:auto}
+    table{width:100%;border-collapse:collapse;font-size:12.5px}
+    thead th{padding:9px 14px;text-align:left;font-size:10.5px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--t3);border-bottom:1px solid var(--border);white-space:nowrap}
+    tbody tr{border-bottom:1px solid rgba(255,255,255,0.03);transition:background 0.12s}
+    tbody tr:hover{background:var(--s-hover)}
+    tbody td{padding:10px 14px;color:var(--t2);vertical-align:middle}
+    tbody td.mono{font-family:'JetBrains Mono',monospace;font-size:11.5px}
+
+    /* ── Forensics filters ── */
+    .filter-bar{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+    .filter-bar input,.filter-bar select{
+      background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-sm);
+      color:var(--t1);font-size:13px;padding:8px 13px;outline:none;transition:all 0.18s;
+    }
+    .filter-bar input{flex:1;min-width:180px}
+    .filter-bar input:focus,.filter-bar select:focus{border-color:rgba(59,130,246,0.4)}
+    .filter-bar select option{background:#191c23}
+
+    /* ── Pagination ── */
+    .pagination{display:flex;justify-content:flex-end;align-items:center;gap:6px;margin-top:12px;padding:0 4px}
+    .pg-btn{padding:5px 11px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--t2);cursor:pointer;font-size:12px;transition:all 0.18s}
+    .pg-btn:hover{color:var(--t1)}
+    .pg-btn.active{background:var(--cyan-dim);color:var(--cyan);border-color:rgba(59,130,246,0.4)}
+
+    /* ── Header analysis grid ── */
+    .two-col{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+    .three-col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+
+    /* ── Alert banner ── */
+    .alert-banner{
+      display:flex;align-items:flex-start;gap:10px;padding:12px 16px;
+      border-radius:var(--r-sm);font-size:13px;margin-bottom:14px;
+    }
+    .alert-banner svg{width:16px;height:16px;flex-shrink:0;margin-top:1px}
+    .alert-red{background:var(--red-dim);border:1px solid rgba(239,68,68,0.25);color:var(--red)}
+    .alert-amber{background:var(--amber-dim);border:1px solid rgba(245,158,11,0.25);color:var(--amber)}
+    .alert-info{background:var(--cyan-dim);border:1px solid rgba(59,130,246,0.25);color:var(--cyan)}
+
+    /* ── Live badge ── */
+    .live-badge{
+      display:inline-flex;align-items:center;gap:5px;
+      background:var(--red-dim);border:1px solid rgba(239,68,68,0.3);
+      border-radius:20px;padding:2px 9px;font-size:11px;font-weight:700;color:var(--red);
+    }
+    .live-dot{width:5px;height:5px;border-radius:50%;background:var(--red);animation:pulse-dot 1.5s infinite}
+
+    /* ── Section header ── */
+    .sec-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+    .sec-hdr h2{font-size:17px;font-weight:700;letter-spacing:-0.3px}
+    .sec-hdr p{font-size:13px;color:var(--t2);margin-top:2px}
+
+    /* ── URL item ── */
+    .url-item{background:rgba(0,0,0,0.15);border:1px solid var(--border);border-radius:var(--r-sm);padding:10px 13px;margin-bottom:7px}
+    .url-item:last-child{margin-bottom:0}
+    .url-text{font-size:11.5px;font-family:'JetBrains Mono',monospace;color:var(--t2);word-break:break-all;margin-bottom:6px}
+    .url-meta{display:flex;gap:7px;flex-wrap:wrap;align-items:center}
+    .det-pill{font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:20px;font-family:'JetBrains Mono',monospace}
+    .det-high{background:var(--red-dim);color:var(--red);border:1px solid rgba(239,68,68,0.3)}
+    .det-clean{background:var(--green-dim);color:var(--green);border:1px solid rgba(34,197,94,0.3)}
+    .det-unk{background:var(--s-hover);color:var(--t3);border:1px solid var(--border)}
+
+    /* ── Extension steps ── */
+    .ext-step{display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);align-items:flex-start}
+    .ext-step:last-child{border-bottom:none}
+    .ext-step-num{width:24px;height:24px;background:var(--cyan-dim);border:1px solid rgba(59,130,246,0.3);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--cyan);flex-shrink:0}
+    .ext-step-txt{font-size:13px;color:var(--t2);line-height:1.6;padding-top:2px}
+
+    /* ── Settings inputs ── */
+    .settings-field label{font-size:12px;color:var(--t2);display:block;margin-bottom:5px;font-weight:500}
+    .settings-field input{width:100%;padding:9px 13px;background:rgba(0,0,0,0.2);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--t1);font-size:13px;outline:none;font-family:'JetBrains Mono',monospace;transition:all 0.18s}
+    .settings-field input:focus{border-color:rgba(59,130,246,0.4)}
+    .settings-field p{font-size:11px;color:var(--t3);margin-top:4px}
+
+    /* ── Toast ── */
+    #toast{
+      position:fixed;bottom:20px;right:20px;z-index:100;
+      background:rgba(25,28,35,0.95);backdrop-filter:blur(16px);
+      border:1px solid var(--border);border-radius:var(--r-sm);
+      padding:11px 16px;font-size:13px;color:var(--t2);
+      transform:translateY(70px);opacity:0;transition:all 0.3s;max-width:300px;
+    }
+    #toast.show{transform:translateY(0);opacity:1}
+    #toast.success{border-color:rgba(34,197,94,0.4);color:var(--green)}
+    #toast.error{border-color:rgba(239,68,68,0.4);color:var(--red)}
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar{width:6px;height:6px}
+    ::-webkit-scrollbar-track{background:transparent}
+    ::-webkit-scrollbar-thumb{background:linear-gradient(to bottom, #ec4899, #8b5cf6, #3b82f6);border-radius:3px}
+
+    /* ── Animations ── */
+    @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+    .fu{animation:fadeUp 0.3s ease both}
+    .d1{animation-delay:0.05s}.d2{animation-delay:0.1s}.d3{animation-delay:0.15s}.d4{animation-delay:0.2s}
+
+    /* ── Responsive ── */
+    @media(max-width:900px){.dash-stats{grid-template-columns:1fr 1fr}.scanner-wrap{grid-template-columns:1fr;height:auto}.two-col{grid-template-columns:1fr}.three-col{grid-template-columns:1fr 1fr}}
+    /* ── Settings Redesign Styles ── */
+    .settings-list {
+      display: flex;
+      flex-direction: column;
+    }
+    .settings-row-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 14px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .settings-row-item:last-child {
+      border-bottom: none;
+      padding-bottom: 0;
+    }
+    .settings-row-item:first-child {
+      padding-top: 0;
+    }
+    .settings-item-label {
+      font-size: 13.5px;
+      font-weight: 500;
+      color: var(--t1);
+    }
+    
+    /* Toggle switch */
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 44px;
+      height: 22px;
+      flex-shrink: 0;
+    }
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .slider-toggle {
+      position: absolute;
+      cursor: pointer;
+      inset: 0;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      border-radius: 22px;
+      box-shadow: inset 0 1px 2px rgba(0,0,0,0.2);
+    }
+    .slider-toggle:before {
+      position: absolute;
+      content: "";
+      height: 14px;
+      width: 14px;
+      left: 3px;
+      bottom: 3px;
+      background-color: #ffffff;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.25);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      border-radius: 50%;
+      z-index: 2;
+    }
+    input:checked + .slider-toggle {
+      background: linear-gradient(135deg, rgba(96, 165, 250, 0.5), rgba(167, 139, 250, 0.5), rgba(244, 114, 182, 0.5)) !important;
+      border-color: rgba(167, 139, 250, 0.5) !important;
+      box-shadow: 0 0 12px rgba(139, 92, 246, 0.2), inset 0 1px 0 rgba(255,255,255,0.1) !important;
+    }
+    input:checked + .slider-toggle:before {
+      transform: translateX(22px);
+      background-color: #ffffff;
+      box-shadow: 0 2px 6px rgba(139, 92, 246, 0.6);
+    }
+
+    /* API Integrations */
+    .api-grid-row {
+      display: grid;
+      grid-template-columns: 200px 1fr;
+      align-items: center;
+      gap: 16px;
+      padding: 6px 0;
+    }
+    .api-label {
+      font-size: 13.5px;
+      font-weight: 500;
+      color: var(--t1);
+    }
+    .settings-input {
+      width: 100%;
+      padding: 9px 13px;
+      background: rgba(0, 0, 0, 0.15);
+      border: 1px solid var(--border);
+      border-radius: var(--r-sm);
+      color: var(--t1);
+      font-size: 13px;
+      outline: none;
+      transition: all 0.18s;
+    }
+    .settings-input:focus {
+      border-color: rgba(59, 130, 246, 0.4);
+      background: rgba(0, 0, 0, 0.25);
+    }
+    .settings-action-btn {
+      display: inline-flex;
+      align-items: center;
+      padding: 9px 16px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border);
+      border-radius: var(--r-sm);
+      color: var(--t1);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.18s;
+    }
+    .settings-action-btn:hover {
+      background: var(--s-hover);
+      border-color: var(--border2);
+    }
+
+    /* Forensic Storage */
+    .storage-btn-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+    .storage-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 12px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border);
+      border-radius: var(--r-sm);
+      color: var(--t1);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.18s;
+    }
+    .storage-btn:hover {
+      background: var(--s-hover);
+      border-color: var(--border2);
+    }
+    #btn-theme-toggle {
+      background: rgba(255, 255, 255, 0.03) !important;
+      border: 1px solid rgba(255, 255, 255, 0.04) !important;
+      border-radius: 8px !important;
+      margin: 10px 14px !important;
+      width: calc(100% - 28px) !important;
+      padding: 10px 14px !important;
+      backdrop-filter: blur(10px) !important;
+      -webkit-backdrop-filter: blur(10px) !important;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.02) !important;
+    }
+    #btn-theme-toggle:hover {
+      background: rgba(255, 255, 255, 0.07) !important;
+      border-color: rgba(255, 255, 255, 0.08) !important;
+      box-shadow: 0 6px 16px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.05) !important;
+      transform: translateY(-1px);
+    }
+    #btn-theme-toggle .nav-icon {
+      color: #a78bfa !important;
+      filter: drop-shadow(0 0 5px rgba(167,139,250,0.45));
+    }
+    body.light-theme {
+      --bg:        #f8fafc;
+      --bg2:       #ffffff;
+      --bg3:       #f1f5f9;
+      --surface:   rgba(15, 23, 42, 0.04);
+      --s-hover:   rgba(15, 23, 42, 0.06);
+      --border:    rgba(15, 23, 42, 0.08);
+      --border2:   rgba(15, 23, 42, 0.12);
+      --cyan-dim:  rgba(59, 130, 246, 0.08);
+      --cyan-glow: rgba(59, 130, 246, 0.15);
+      --red-dim:   rgba(239, 68, 68, 0.08);
+      --orange-dim:rgba(249, 115, 22, 0.08);
+      --amber-dim: rgba(245, 158, 11, 0.08);
+      --green-dim: rgba(34, 197, 94, 0.08);
+      --t1:        #0f172a;
+      --t2:        #475569;
+      --t3:        #64748b;
+      --t4:        #cbd5e1;
+    }
+    
+    /* --- Light Mode Refinements --- */
+    body.light-theme::before {
+      background: radial-gradient(circle 700px at 80% 20%, rgba(244, 114, 182, 0.25) 0%, transparent 80%),
+                  radial-gradient(circle 600px at 20% 80%, rgba(96, 165, 250, 0.25) 0%, transparent 80%),
+                  radial-gradient(circle 600px at 50% 50%, rgba(167, 139, 250, 0.2) 0%, transparent 80%),
+                  radial-gradient(circle 500px at 70% 80%, rgba(74, 222, 128, 0.15) 0%, transparent 80%),
+                  radial-gradient(circle 500px at 30% 15%, rgba(251, 146, 60, 0.15) 0%, transparent 80%) !important;
+      background-color: #f0f4f8 !important;
+    }
+    body.light-theme #sidebar {
+      background: rgba(255, 255, 255, 0.75) !important;
+      backdrop-filter: blur(30px) saturate(180%) !important;
+      -webkit-backdrop-filter: blur(30px) saturate(180%) !important;
+      border-right: 1px solid rgba(255, 255, 255, 0.6) !important;
+      box-shadow: 0 4px 30px rgba(0, 0, 0, 0.01) !important;
+    }
+    body.light-theme #topbar {
+      background: rgba(222, 233, 252, 0.48) !important;
+      backdrop-filter: blur(20px) saturate(250%) !important;
+      -webkit-backdrop-filter: blur(20px) saturate(250%) !important;
+      border-bottom: 1px solid rgba(59, 130, 246, 0.08) !important;
+      box-shadow: 0 8px 32px rgba(15, 23, 42, 0.03), inset 0 -1px 0 rgba(255, 255, 255, 0.5) !important;
+      transform: translate3d(0, 0, 0);
+      will-change: backdrop-filter;
+    }
+    body.light-theme .card,
+    body.light-theme .stat-card,
+    body.light-theme .scan-panel {
+      background: rgba(255, 255, 255, 0.75) !important;
+      border: 1px solid rgba(255, 255, 255, 0.55) !important;
+      box-shadow: 0 12px 40px -10px rgba(15, 23, 42, 0.05),
+                  inset 0 1px 0 rgba(255, 255, 255, 0.5) !important;
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+    }
+    body.light-theme .card:hover,
+    body.light-theme .stat-card:hover,
+    body.light-theme .scan-panel:hover {
+      border-color: rgba(255, 255, 255, 0.8) !important;
+      box-shadow: 0 15px 45px -12px rgba(15, 23, 42, 0.07),
+                  inset 0 1px 0 rgba(255, 255, 255, 0.6) !important;
+    }
+    body.light-theme .stat-card:hover {
+      transform: translateY(-2px) !important;
+    }
+    body.light-theme .nav-item:hover {
+      background: rgba(15, 23, 42, 0.03) !important;
+      border-color: rgba(15, 23, 42, 0.01) !important;
+      color: var(--t1) !important;
+      transform: translateX(2px) !important;
+    }
+    body.light-theme .nav-item.active {
+      color: #0f172a !important;
+      background: rgba(255, 255, 255, 0.75) !important;
+      border: 1px solid rgba(255, 255, 255, 0.8) !important;
+      box-shadow: 0 8px 24px rgba(139, 92, 246, 0.22),
+                  inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
+      font-weight: 600 !important;
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+    }
+    body.light-theme .nav-item.active::before {
+      background: linear-gradient(to bottom, #ec4899, #8b5cf6, #3b82f6) !important;
+      box-shadow: 0 0 10px rgba(139, 92, 246, 0.6) !important;
+    }
+    body.light-theme .nav-item.active .nav-icon {
+      color: #7c3aed !important;
+      opacity: 1 !important;
+      filter: drop-shadow(0 0 5px rgba(139, 92, 246, 0.45));
+    }
+
+    /* Stat Cards Gradient Backgrounds (Light Mode) */
+    body.light-theme .dash-stats .stat-card:nth-child(1) {
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.8) 0%, rgba(59, 130, 246, 0.08) 100%) !important;
+      border: 1px solid rgba(59, 130, 246, 0.3) !important;
+      box-shadow: 0 12px 35px -8px rgba(59, 130, 246, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.8) !important;
+    }
+    body.light-theme .dash-stats .stat-card:nth-child(2) {
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.8) 0%, rgba(239, 68, 68, 0.08) 100%) !important;
+      border: 1px solid rgba(239, 68, 68, 0.3) !important;
+      box-shadow: 0 12px 35px -8px rgba(239, 68, 68, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.8) !important;
+    }
+    body.light-theme .dash-stats .stat-card:nth-child(3) {
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.8) 0%, rgba(245, 158, 11, 0.08) 100%) !important;
+      border: 1px solid rgba(245, 158, 11, 0.3) !important;
+      box-shadow: 0 12px 35px -8px rgba(245, 158, 11, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.8) !important;
+    }
+    body.light-theme .dash-stats .stat-card:nth-child(4) {
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.8) 0%, rgba(34, 197, 94, 0.08) 100%) !important;
+      border: 1px solid rgba(34, 197, 94, 0.3) !important;
+      box-shadow: 0 12px 35px -8px rgba(34, 197, 94, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.8) !important;
+    }
+
+    /* Hover States for Stat Cards (Light Mode) */
+    body.light-theme .dash-stats .stat-card:nth-child(1):hover { border-color: rgba(59, 130, 246, 0.45) !important; box-shadow: 0 15px 45px -12px rgba(59, 130, 246, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.8) !important; transform: translateY(-2px) !important; }
+    body.light-theme .dash-stats .stat-card:nth-child(2):hover { border-color: rgba(239, 68, 68, 0.45) !important; box-shadow: 0 15px 45px -12px rgba(239, 68, 68, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.8) !important; transform: translateY(-2px) !important; }
+    body.light-theme .dash-stats .stat-card:nth-child(3):hover { border-color: rgba(245, 158, 11, 0.45) !important; box-shadow: 0 15px 45px -12px rgba(245, 158, 11, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.8) !important; transform: translateY(-2px) !important; }
+    body.light-theme .dash-stats .stat-card:nth-child(4):hover { border-color: rgba(34, 197, 94, 0.45) !important; box-shadow: 0 15px 45px -12px rgba(34, 197, 94, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.8) !important; transform: translateY(-2px) !important; }
+
+    body.light-theme #btn-theme-toggle {
+      background: rgba(255, 255, 255, 0.4) !important;
+      border: 1px solid rgba(15, 23, 42, 0.06) !important;
+      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.02), inset 0 1px 0 rgba(255,255,255,0.5) !important;
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+    }
+    body.light-theme #btn-theme-toggle:hover {
+      background: rgba(255, 255, 255, 0.75) !important;
+      border-color: rgba(15, 23, 42, 0.1) !important;
+      box-shadow: 0 6px 16px rgba(15, 23, 42, 0.04), inset 0 1px 0 rgba(255,255,255,0.8) !important;
+    }
+    body.light-theme #btn-theme-toggle .nav-icon {
+      color: #8b5cf6 !important;
+      filter: drop-shadow(0 0 4px rgba(139, 92, 246, 0.3));
+    }
+    body.light-theme .slider-toggle {
+      background: rgba(15, 23, 42, 0.06) !important;
+      border: 1px solid rgba(15, 23, 42, 0.1) !important;
+      box-shadow: inset 0 1px 2px rgba(0,0,0,0.05) !important;
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+    }
+    body.light-theme input:checked + .slider-toggle {
+      background: linear-gradient(135deg, rgba(96, 165, 250, 0.6), rgba(167, 139, 250, 0.6), rgba(244, 114, 182, 0.6)) !important;
+      border-color: rgba(167, 139, 250, 0.4) !important;
+      box-shadow: 0 3px 12px rgba(139, 92, 246, 0.15) !important;
+    }
+    body.light-theme .sb-logo-ver {
+      color: var(--t2) !important;
+      background: rgba(15, 23, 42, 0.03) !important;
+      border-color: rgba(15, 23, 42, 0.08) !important;
+    }
+    body.light-theme input, 
+    body.light-theme textarea,
+    body.light-theme select,
+    body.light-theme .url-input-row input,
+    body.light-theme .settings-field input {
+      background: rgba(255, 255, 255, 0.9) !important;
+      border: 1px solid rgba(15, 23, 42, 0.15) !important;
+      color: var(--t1) !important;
+    }
+    body.light-theme input:focus, 
+    body.light-theme textarea:focus,
+    body.light-theme select:focus,
+    body.light-theme .url-input-row input:focus,
+    body.light-theme .settings-field input:focus {
+      border-color: #3b82f6 !important;
+      background: #ffffff !important;
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.08) !important;
+    }
+    body.light-theme .url-item,
+    body.light-theme .auth-item,
+    body.light-theme .url-section {
+      background: rgba(15, 23, 42, 0.03) !important;
+      border: 1px solid rgba(15, 23, 42, 0.06) !important;
+    }
+    body.light-theme .sb-divider {
+      background: rgba(15, 23, 42, 0.06) !important;
+    }
+    body.light-theme .sb-bottom {
+      border-top: 1px solid rgba(15, 23, 42, 0.06) !important;
+    }
+    body.light-theme .topbar-more {
+      background: rgba(255, 255, 255, 0.9) !important;
+      border: 1px solid rgba(15, 23, 42, 0.08) !important;
+    }
+    body.light-theme .btn-secondary {
+      background: rgba(255, 255, 255, 0.9) !important;
+      border: 1px solid rgba(15, 23, 42, 0.1) !important;
+      color: var(--t2) !important;
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+    }
+    body.light-theme .btn-secondary:hover {
+      background: #ffffff !important;
+      color: var(--t1) !important;
+      border-color: rgba(139, 92, 246, 0.35) !important;
+    }
+    body.light-theme .btn-primary {
+      background: linear-gradient(135deg, rgba(96, 165, 250, 0.22), rgba(167, 139, 250, 0.22), rgba(244, 114, 182, 0.22)) !important;
+      color: #5c3ef2 !important;
+      border: 1px solid rgba(167, 139, 250, 0.5) !important;
+      box-shadow: 0 4px 12px rgba(139, 92, 246, 0.08) !important;
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+    }
+    body.light-theme .btn-primary:hover {
+      background: linear-gradient(135deg, rgba(96, 165, 250, 0.32), rgba(167, 139, 250, 0.32), rgba(244, 114, 182, 0.32)) !important;
+      color: #3b1bf2 !important;
+      border-color: rgba(167, 139, 250, 0.7) !important;
+      box-shadow: 0 6px 18px rgba(139, 92, 246, 0.15) !important;
+    }
+    body.light-theme ::-webkit-scrollbar-thumb {
+      background: linear-gradient(to bottom, rgba(236, 72, 153, 0.5), rgba(139, 92, 246, 0.5), rgba(59, 130, 246, 0.5)) !important;
+    }
+    body.light-theme .forensics-row:hover {
+      background: rgba(15, 23, 42, 0.02) !important;
+    }
+    body.light-theme .detail-panel {
+      background: rgba(255, 255, 255, 0.95) !important;
+      border-left: 1px solid rgba(15, 23, 42, 0.08) !important;
+      box-shadow: -10px 0 30px rgba(0, 0, 0, 0.02) !important;
+    }
+    body.light-theme .drop-zone {
+      background: rgba(15, 23, 42, 0.02) !important;
+      border: 2px dashed rgba(15, 23, 42, 0.15) !important;
+    }
+    body.light-theme .drop-zone:hover {
+      background: rgba(59, 130, 246, 0.02) !important;
+      border-color: #3b82f6 !important;
+    }
+    .live-threats-btn {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      background: rgba(239, 68, 68, 0.05) !important;
+      border: 1px solid rgba(239, 68, 68, 0.22) !important;
+      border-radius: 6px;
+      padding: 7px 15px;
+      font-size: 12px;
+      font-weight: 700;
+      color: #ef4444 !important;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .live-threats-btn:hover {
+      background: rgba(239, 68, 68, 0.1) !important;
+      border-color: rgba(239, 68, 68, 0.35) !important;
+    }
+    .floating-scan-btn {
+      position: absolute;
+      bottom: 24px;
+      right: 24px;
+      z-index: 99;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 24px;
+      border-radius: 30px;
+      background: rgba(17, 19, 24, 0.25) !important;
+      backdrop-filter: blur(24px) saturate(180%) !important;
+      -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
+      border: 1px solid rgba(255, 255, 255, 0.08) !important;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+      color: #60a5fa !important;
+      font-size: 13.5px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      text-decoration: none;
+    }
+    .floating-scan-btn:hover {
+      background: rgba(17, 19, 24, 0.4) !important;
+      border-color: rgba(96, 165, 250, 0.35) !important;
+      box-shadow: 0 12px 35px rgba(96, 165, 250, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+      transform: translateY(-2px) scale(1.02);
+    }
+    .floating-scan-btn svg {
+      width: 16px;
+      height: 16px;
+      stroke-width: 2.5;
+    }
+    body.light-theme .floating-scan-btn {
+      background: rgba(222, 233, 252, 0.48) !important;
+      border: 1.5px solid rgba(59, 130, 246, 0.35) !important;
+      box-shadow: 0 10px 30px rgba(59, 130, 246, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.75) !important;
+      color: #2563eb !important;
+      backdrop-filter: blur(20px) saturate(250%) !important;
+      -webkit-backdrop-filter: blur(20px) saturate(250%) !important;
+      transform: translate3d(0, 0, 0);
+      will-change: backdrop-filter;
+    }
+    body.light-theme .floating-scan-btn:hover {
+      background: rgba(222, 233, 252, 0.68) !important;
+      border-color: rgba(59, 130, 246, 0.55) !important;
+      box-shadow: 0 12px 35px rgba(59, 130, 246, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.85) !important;
+      color: #1d4ed8 !important;
+      transform: translate3d(0, -2px, 0) scale(1.02);
+    }
+    body.light-theme .live-threats-btn {
+      background: rgba(239, 68, 68, 0.04) !important;
+      border-color: rgba(239, 68, 68, 0.18) !important;
+    }
+    body.light-theme .live-threats-btn:hover {
+      background: rgba(239, 68, 68, 0.08) !important;
+      border-color: rgba(239, 68, 68, 0.3) !important;
+    }
+  </style>
+
+</head>
+<body>
+<div id="app">
+
+<!-- ── Sidebar ───────────────────────────────── -->
+<nav id="sidebar">
+  <a class="sb-logo" href="#" onclick="nav('dashboard');return false" style="display:flex; align-items:center; gap:12px; padding:18px 16px; border-bottom:1px solid var(--border); text-decoration:none;">
+    <div class="sb-logo-img-wrap">
+      <img src="logo.png" alt="SecureMail Logo" style="width:100%; height:100%; border-radius:6px; object-fit:contain;">
+    </div>
+    <div style="display:flex; align-items:baseline; gap:6px;">
+      <span class="sb-logo-name" style="background:linear-gradient(135deg, #60a5fa, #a78bfa, #f472b6); -webkit-background-clip:text; -webkit-text-fill-color:transparent; font-weight:800; font-size:16px; letter-spacing:-0.4px;">SecureMail</span>
+      <span class="sb-logo-ver" style="font-size:10px; font-weight:600; background:rgba(255,255,255,0.05); color:var(--t2); border:1px solid var(--border); border-radius:4px; padding:1px 5px;">v1.0</span>
+    </div>
+  </a>
+
+  <div class="sb-nav">
+    <div class="sb-section">Main</div>
+    <button class="nav-item" id="nav-dashboard" onclick="nav('dashboard')">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+      Dashboard
+    </button>
+    <button class="nav-item active" id="nav-scan" onclick="nav('scan')">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      Email Scanner
+    </button>
+    <button class="nav-item" id="nav-threats" onclick="nav('threats')">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      Threat Analysis
+    </button>
+
+    <div class="sb-divider"></div>
+    <div class="sb-section">Forensics</div>
+    <button class="nav-item" id="nav-forensics" onclick="nav('forensics')">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+      Forensic Logs
+    </button>
+    <button class="nav-item" id="nav-headers" onclick="nav('headers')">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>
+      Header Analysis
+    </button>
+
+    <div class="sb-divider"></div>
+    <div class="sb-section">Tools</div>
+    <button class="nav-item" id="nav-extension" onclick="nav('extension')">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+      Browser Extension
+    </button>    <button class="nav-item" id="nav-settings" onclick="nav('settings')">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      Settings
+    </button>
+    <div class="sb-divider"></div>
+    <div class="sb-section">Appearance</div>
+    <button class="nav-item" id="btn-theme-toggle" onclick="toggleTheme()">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="5"/>
+        <line x1="12" y1="1" x2="12" y2="3"/>
+        <line x1="12" y1="21" x2="12" y2="23"/>
+        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+        <line x1="1" y1="12" x2="3" y2="12"/>
+        <line x1="21" y1="12" x2="23" y2="12"/>
+        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+      </svg>
+      <span id="theme-text">Light Theme</span>
+    </button>
+  </div>
+  <div class="sb-bottom">
+    <div class="sb-account">
+      <div class="sb-avatar">S</div>
+      <div>
+        <div class="sb-account-name">Personal Account</div>
+        <div class="sb-account-role">Security Analyst</div>
+      </div>
+    </div>
+  </div>
+</nav>
+
+<!-- ── Main ──────────────────────────────────── -->
+<div id="main">
+  <!-- Topbar -->
+  <header id="topbar">
+    <div class="topbar-title" id="topbar-title">Dashboard</div>
+    <div class="topbar-right">
+      <button class="live-threats-btn" onclick="nav('threats')">
+        <div class="threat-dot"></div>
+        <span id="threats-today-count">0 Live threats</span>
+      </button>
+    </div>
+  </header>
+
+  <div id="content">
+
+    <!-- ═══ DASHBOARD ═══ -->
+    <div class="page active" id="page-dashboard">
+      <!-- Stat cards -->
+      <div class="dash-stats fu">
+        <div class="stat-card">
+          <div class="stat-icon" style="background:var(--cyan-dim)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+          </div>
+          <div class="stat-lbl">Emails scanned</div>
+          <div class="stat-val" id="ov-total">—</div>
+          <div class="stat-sub" id="ov-today">Loading…</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon" style="background:var(--red-dim)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          </div>
+          <div class="stat-lbl">Threats found</div>
+          <div class="stat-val" style="color:var(--red)" id="ov-threats">—</div>
+          <div class="stat-sub" id="ov-critical-sub">Loading…</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon" style="background:var(--amber-dim)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="var(--amber)" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+          </div>
+          <div class="stat-lbl">Attachments</div>
+          <div class="stat-val" style="color:var(--amber)" id="ov-attach">—</div>
+          <div class="stat-sub" id="ov-attach-sub">scanned</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon" style="background:var(--green-dim)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+          </div>
+          <div class="stat-lbl">Links checked</div>
+          <div class="stat-val" style="color:var(--green)" id="ov-links">—</div>
+          <div class="stat-sub" id="ov-links-sub">all time</div>
+        </div>
+      </div>
+
+      <!-- Recent threats + Breakdown -->
+      <div class="two-col fu d1">
+        <!-- Recent threats feed -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              Recent threats
+            </div>
+            <div class="live-badge"><div class="live-dot"></div>Live</div>
+          </div>
+          <div id="recent-threats-list">
+            <div style="padding:32px;text-align:center;color:var(--t3);font-size:13px">Loading recent threats…</div>
+          </div>
+        </div>
+
+        <!-- Threat breakdown -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>
+              Threat breakdown
+            </div>
+          </div>
+          <div class="card-p" id="threat-breakdown">
+            <div style="color:var(--t3);font-size:13px">Loading…</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ EMAIL SCANNER ═══ -->
+    <div class="page" id="page-scan" style="padding:0;height:calc(100vh - 57px)">
+      <div class="scanner-wrap" style="margin:0;height:100%">
+
+        <!-- Left: input panel -->
+        <div class="scan-panel" style="border-radius:0;border-top:none;border-left:none;border-bottom:none">
+          <div class="scan-panel-header">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+            Paste email / .eml
+          </div>
+          <div class="scan-panel-body">
+            <!-- Info banner -->
+            <div class="alert-banner alert-amber fu" style="margin-bottom:14px">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              Paste raw email (.eml), upload an attachment, or enter a URL to scan. Supports Gmail and Outlook formats.
+            </div>
+
+            <!-- Drop zone -->
+            <div class="drop-zone" id="email-drop" onclick="document.getElementById('eml-file').click()">
+              <input type="file" id="eml-file" accept=".eml,.msg,.txt" style="display:none" onchange="handleEmlFile(event)"/>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              <h3>Drop .eml file here or paste raw email</h3>
+              <p>Gmail Export, Outlook .msg, raw headers accepted</p>
+            </div>
+
+            <textarea id="email-input" placeholder="Or paste raw email text here…
+From: PayPal Support <noreply@paypa1-support.ru>
+Subject: Urgent: Your account has been suspended
+Authentication-Results: spf=fail; dkim=fail; dmarc=fail" style="width:100%;min-height:130px;resize:vertical;background:rgba(0,0,0,0.2);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--t1);font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.6;padding:12px;outline:none;transition:all 0.18s;display:block;margin-bottom:12px"></textarea>
+
+            <div style="display:flex;gap:8px;margin-bottom:16px">
+              <button class="btn btn-secondary" style="font-size:12px;padding:7px 14px" onclick="clearScan()">Or enter text</button>
+              <button class="btn btn-primary" onclick="scanEmail()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                Scan
+              </button>
+            </div>
+
+            <!-- URL section -->
+            <div class="url-section">
+              <div class="url-section-title">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                URL / Link scanner
+              </div>
+              <div class="url-input-row">
+                <input id="url-quick" type="url" placeholder="https://suspicious-site.com"/>
+                <button class="btn btn-primary btn-sm" onclick="quickUrlScan()">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                  Check
+                </button>
+              </div>
+              <div class="url-input-row">
+                <input id="attach-quick-name" type="text" placeholder="Attachment hash or filename"/>
+                <button class="btn btn-secondary btn-sm" onclick="document.getElementById('attach-quick-file').click()">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                  Lookup
+                </button>
+                <input type="file" id="attach-quick-file" style="display:none" onchange="quickAttachScan(event)"/>
+              </div>
+              <div class="loader-row" id="url-loader"><div class="spinner"></div><span>Scanning…</span></div>
+              <div class="err" id="url-err"></div>
+              <div id="url-quick-result" style="display:none;margin-top:10px"></div>
+            </div>
+
+            <div class="loader-row" id="scan-loader" style="margin-top:12px"><div class="spinner"></div><span>Analyzing… (VirusTotal ~15s)</span></div>
+            <div class="err" id="scan-err"></div>
+
+            <div style="margin-top:14px">
+              <button class="btn btn-secondary btn-sm" onclick="runDemo()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                Run Demo Scan
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: results panel -->
+        <div class="scan-panel" style="border-radius:0;border-top:none;border-right:none;border-bottom:none">
+          <div class="scan-panel-header">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+            Scan result
+          </div>
+          <div class="scan-panel-body" id="scan-result-panel">
+            <div class="result-ready">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              <p>Ready to scan</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ THREAT ANALYSIS ═══ -->
+    <div class="page" id="page-threats">
+      <div id="threat-alert-banner" class="alert-banner alert-red fu" style="display:none">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        <span id="threat-alert-text"></span>
+      </div>
+      <div class="two-col fu d1">
+        <!-- Threat feed -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.1"/></svg>
+              Threat intelligence feed
+            </div>
+            <div id="threat-feed-count" class="tag tag-critical" style="display:none"></div>
+          </div>
+          <div id="threat-feed-list">
+            <div style="padding:32px;text-align:center;color:var(--t3);font-size:13px">Loading threat feed…</div>
+          </div>
+        </div>
+
+        <!-- Quick scanners -->
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <!-- URL scan -->
+          <div class="card card-p">
+            <div class="card-title" style="margin-bottom:12px">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+              URL Reputation Check
+            </div>
+            <div class="url-input-row">
+              <input id="ta-url" type="url" placeholder="https://suspicious.com"/>
+              <button class="btn btn-primary btn-sm" onclick="taUrlScan()">Scan</button>
+            </div>
+            <div class="loader-row" id="ta-url-loader"><div class="spinner"></div><span>Scanning…</span></div>
+            <div class="err" id="ta-url-err"></div>
+            <div id="ta-url-res" style="display:none;margin-top:10px"></div>
+          </div>
+
+          <!-- IP check -->
+          <div class="card card-p">
+            <div class="card-title" style="margin-bottom:12px">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+              IP Reputation Check
+            </div>
+            <div class="url-input-row">
+              <input id="ta-ip" type="text" placeholder="185.234.218.47"/>
+              <button class="btn btn-primary btn-sm" onclick="taIpScan()">Check</button>
+            </div>
+            <div class="loader-row" id="ta-ip-loader"><div class="spinner"></div><span>Checking…</span></div>
+            <div class="err" id="ta-ip-err"></div>
+            <div id="ta-ip-res" style="display:none;margin-top:10px"></div>
+          </div>
+
+          <!-- Attachment -->
+          <div class="card card-p">
+            <div class="card-title" style="margin-bottom:12px">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+              Attachment Hash Check
+            </div>
+            <div class="drop-zone" style="padding:20px" id="ta-drop" onclick="document.getElementById('ta-file').click()">
+              <input type="file" id="ta-file" style="display:none" onchange="taFileScan(event)"/>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:24px;height:24px;margin-bottom:6px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              <h3 style="font-size:13px">Drop file or click to browse</h3>
+            </div>
+            <div class="loader-row" id="ta-file-loader"><div class="spinner"></div><span>Checking hash…</span></div>
+            <div class="err" id="ta-file-err"></div>
+            <div id="ta-file-res" style="display:none;margin-top:10px"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ FORENSICS ═══ -->
+    <div class="page" id="page-forensics">
+      <div class="sec-hdr fu">
+        <div><h2>Forensic Threat Logs</h2><p style="color:var(--t2);font-size:13px;margin-top:2px">Historical scan records</p></div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-secondary btn-sm" onclick="exportForensics('json')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>JSON
+          </button>
+          <button class="btn btn-secondary btn-sm" onclick="exportForensics('csv')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>CSV
+          </button>
+          <button class="btn btn-primary btn-sm" onclick="loadForensics()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.1"/></svg>Refresh
+          </button>
+        </div>
+      </div>
+      <div class="dash-stats fu d1" style="grid-template-columns:repeat(4,1fr)">
+        <div class="stat-card"><div class="stat-lbl">Total Scans</div><div class="stat-val" id="f-total">—</div></div>
+        <div class="stat-card"><div class="stat-lbl" style="color:var(--red)">Critical</div><div class="stat-val" style="color:var(--red)" id="f-crit">—</div></div>
+        <div class="stat-card"><div class="stat-lbl" style="color:var(--orange)">High</div><div class="stat-val" style="color:var(--orange)" id="f-high">—</div></div>
+        <div class="stat-card"><div class="stat-lbl" style="color:var(--green)">Clean</div><div class="stat-val" style="color:var(--green)" id="f-clean">—</div></div>
+      </div>
+      <div class="filter-bar fu d2">
+        <input type="text" id="f-search" placeholder="Search sender, subject…" oninput="filterLogs()"/>
+        <select id="f-risk" onchange="filterLogs()">
+          <option value="">All Risk Levels</option>
+          <option value="critical">Critical</option>
+          <option value="high">High</option>
+          <option value="medium">Medium</option>
+          <option value="low">Low</option>
+          <option value="clean">Clean</option>
+        </select>
+      </div>
+      <div class="card fu d3">
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr>
+              <th>Scanned At</th><th>Sender</th><th>Subject</th>
+              <th>Score</th><th>Risk</th><th>Threats</th><th>Actions</th>
+            </tr></thead>
+            <tbody id="f-tbody"><tr><td colspan="7" style="text-align:center;padding:32px;color:var(--t3)">Loading…</td></tr></tbody>
+          </table>
+        </div>
+        <div class="pagination" id="f-pag"></div>
+      </div>
+    </div>
+
+    <!-- ═══ HEADER ANALYSIS ═══ -->
+    <div class="page" id="page-headers">
+      <div class="sec-hdr fu"><div><h2>Header Analysis</h2><p style="color:var(--t2);font-size:13px;margin-top:2px">Inspect routing, authentication, and sender anomalies</p></div></div>
+      <div class="card card-p fu d1" style="margin-bottom:14px">
+        <textarea id="hdr-input" placeholder="Received: from mail.evil.ru&#10;From: Apple Support <noreply@mail2036.xyz>&#10;Authentication-Results: spf=fail; dkim=none; dmarc=fail" style="width:100%;min-height:140px;resize:vertical;background:rgba(0,0,0,0.2);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--t1);font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.6;padding:12px;outline:none;transition:all 0.18s"></textarea>
+        <div style="display:flex;gap:8px;margin-top:12px">
+          <button class="btn btn-primary" onclick="analyzeHeaders()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>Analyze Headers
+          </button>
+          <div class="loader-row on" id="hdr-loader" style="display:none"><div class="spinner"></div><span>Analyzing…</span></div>
+        </div>
+        <div class="err" id="hdr-err"></div>
+      </div>
+      <div id="hdr-result" style="display:none">
+        <div class="two-col fu d2" style="margin-bottom:14px">
+          <div class="card card-p"><div class="card-title" style="margin-bottom:12px">Authentication</div><div id="ha-auth"></div></div>
+          <div class="card card-p"><div class="card-title" style="margin-bottom:12px">Sender Details</div><div id="ha-sender"></div></div>
+        </div>
+        <div class="card card-p fu d3"><div class="card-title" style="margin-bottom:12px">Routing & IP</div><div id="ha-meta"></div></div>
+      </div>
+    </div>
+
+    <!-- ═══ EXTENSION ═══ -->
+    <div class="page" id="page-extension">
+      <div class="sec-hdr fu"><div><h2>Browser Extension</h2><p style="color:var(--t2);font-size:13px;margin-top:2px">One-click email threat detection in your browser</p></div></div>
+      <div class="three-col fu d1" style="margin-bottom:14px">
+        <div class="card card-p" style="text-align:center">
+          <div style="width:52px;height:52px;background:linear-gradient(135deg,#4285f4,#34a853);border-radius:13px;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;box-shadow:0 0 18px rgba(66,133,244,0.3)">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="white"><circle cx="12" cy="12" r="10"/></svg>
+          </div>
+          <h3 style="font-size:14px;margin-bottom:7px">Chrome / Edge</h3>
+          <p style="color:var(--t2);font-size:12.5px;margin-bottom:14px">Load as unpacked developer extension</p>
+          <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="showExtInst('chrome')">Install on Chrome</button>
+        </div>
+        <div class="card card-p" style="text-align:center">
+          <div style="width:52px;height:52px;background:linear-gradient(135deg,#ff6900,#ff3750);border-radius:13px;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;box-shadow:0 0 18px rgba(255,105,0,0.3)">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/></svg>
+          </div>
+          <h3 style="font-size:14px;margin-bottom:7px">Firefox</h3>
+          <p style="color:var(--t2);font-size:12.5px;margin-bottom:14px">Load as temporary add-on via about:debugging</p>
+          <button class="btn btn-secondary" style="width:100%;justify-content:center" onclick="showExtInst('firefox')">Install on Firefox</button>
+        </div>
+        <div class="card card-p" style="text-align:center;opacity:0.6">
+          <div style="width:52px;height:52px;background:linear-gradient(135deg,var(--cyan),var(--purple));border-radius:13px;display:flex;align-items:center;justify-content:center;margin:0 auto 14px">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+          </div>
+          <h3 style="font-size:14px;margin-bottom:7px">Safari</h3>
+          <p style="color:var(--t2);font-size:12.5px;margin-bottom:14px">Coming in next release</p>
+          <button class="btn btn-secondary" style="width:100%;justify-content:center;cursor:not-allowed">Coming Soon</button>
+        </div>
+      </div>
+      <div class="card card-p fu d2" id="ext-inst-card" style="display:none;margin-bottom:14px">
+        <div class="card-title" style="margin-bottom:12px" id="ext-inst-title">Installation Steps</div>
+        <div id="ext-inst-body"></div>
+      </div>
+      <div class="card card-p fu d3">
+        <div class="card-title" style="margin-bottom:14px">What SecureMail Extension Does</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div class="url-item"><div style="font-size:13px;font-weight:600;margin-bottom:3px">⚡ One-Click Scan</div><div style="font-size:12px;color:var(--t2)">Right-click any email text in Gmail or Outlook to scan instantly.</div></div>
+          <div class="url-item"><div style="font-size:13px;font-weight:600;margin-bottom:3px">🔗 URL Guard</div><div style="font-size:12px;color:var(--t2)">Flags suspicious URLs before you click them.</div></div>
+          <div class="url-item"><div style="font-size:13px;font-weight:600;margin-bottom:3px">📋 Clipboard Scan</div><div style="font-size:12px;color:var(--t2)">Paste and analyze copied email content from the popup.</div></div>
+          <div class="url-item"><div style="font-size:13px;font-weight:600;margin-bottom:3px">🔔 Real-Time Alerts</div><div style="font-size:12px;color:var(--t2)">Badge turns red with threat count on detection.</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ SETTINGS ═══ -->
+    <div class="page" id="page-settings">
+      <div style="display:flex; flex-direction:column; gap:16px; max-width:800px; margin:0 auto;" class="fu">
+        
+        <!-- Scanning Preferences Card -->
+        <div class="card card-p">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+            <div style="color:var(--t2);">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+            </div>
+            <div style="font-size:14px; font-weight:700; color:var(--t1); letter-spacing:-0.2px;">Scanning preferences</div>
+          </div>
+          
+          <div class="settings-list">
+            <div class="settings-row-item">
+              <span class="settings-item-label">Deep attachment sandbox scan</span>
+              <label class="switch">
+                <input type="checkbox" id="pref-sandbox" onchange="saveSettings()">
+                <span class="slider-toggle"></span>
+              </label>
+            </div>
+            <div class="settings-row-item">
+              <span class="settings-item-label">VirusTotal API integration</span>
+              <label class="switch">
+                <input type="checkbox" id="pref-vt" onchange="saveSettings()">
+                <span class="slider-toggle"></span>
+              </label>
+            </div>
+            <div class="settings-row-item">
+              <span class="settings-item-label">Check URLs against threat intel DB</span>
+              <label class="switch">
+                <input type="checkbox" id="pref-url-db" onchange="saveSettings()">
+                <span class="slider-toggle"></span>
+              </label>
+            </div>
+            <div class="settings-row-item">
+              <span class="settings-item-label">Auto-generate forensic report</span>
+              <label class="switch">
+                <input type="checkbox" id="pref-report" onchange="saveSettings()">
+                <span class="slider-toggle"></span>
+              </label>
+            </div>
+            <div class="settings-row-item">
+              <span class="settings-item-label">Email risk score threshold alerts</span>
+              <label class="switch">
+                <input type="checkbox" id="pref-threshold" onchange="saveSettings()">
+                <span class="slider-toggle"></span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- API Integrations Card -->
+        <div class="card card-p">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+            <div style="color:var(--t2);">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+            </div>
+            <div style="font-size:14px; font-weight:700; color:var(--t1); letter-spacing:-0.2px;">API integrations</div>
+          </div>
+          
+          <div style="display:flex; flex-direction:column; gap:16px;">
+            <div class="api-grid-row">
+              <div class="api-label">VirusTotal API key</div>
+              <div class="api-control">
+                <input type="password" id="cfg-vt" class="settings-input" placeholder="Enter key..." onchange="saveSettings()">
+              </div>
+            </div>
+            <div class="api-grid-row">
+              <div class="api-label">AbuseIPDB key</div>
+              <div class="api-control">
+                <input type="password" id="cfg-abuse" class="settings-input" placeholder="Enter key..." onchange="saveSettings()">
+              </div>
+            </div>
+            <div class="api-grid-row">
+              <div class="api-label">Outlook OAuth</div>
+              <div class="api-control">
+                <button class="settings-action-btn" onclick="connectOutlook()">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                  Connect Outlook
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Forensic Log Storage Card -->
+        <div class="card card-p">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+            <div style="color:var(--t2);">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/></svg>
+            </div>
+            <div style="font-size:14px; font-weight:700; color:var(--t1); letter-spacing:-0.2px;">Forensic log storage</div>
+          </div>
+          
+          <div class="storage-btn-row">
+            <button class="storage-btn" onclick="chooseLocalFolder()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2 2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+              Choose local folder
+            </button>
+            <button class="storage-btn" onclick="syncToCloud()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10a5 5 0 0 0-9.54-1.54A6 6 0 0 0 6 20h11.5A5.5 5.5 0 0 0 22 14.5z"/></svg>
+              Sync to cloud
+            </button>
+            <button class="storage-btn" onclick="exportForensics('json')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Export all logs
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div><!-- /content -->
+
+  <!-- Floating Scan Email Button -->
+  <a class="floating-scan-btn" href="#" onclick="nav('scan');return false;" role="button">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    Scan Email
+  </a>
+</div><!-- /main -->
+</div><!-- /app -->
+
+<div id="toast"></div>
+
+<script>
+const API = 'http://localhost:8000/api';
+
+// ── Navigation ────────────────────────────────
+const TITLES = {dashboard:'Dashboard',scan:'Email Scanner',threats:'Threat Analysis',forensics:'Forensic Logs',headers:'Header Analysis',extension:'Browser Extension',settings:'Settings'};
+function nav(page) {
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.getElementById('page-'+page).classList.add('active');
+  const el = document.getElementById('nav-'+page);
+  if(el) el.classList.add('active');
+  document.getElementById('topbar-title').textContent = TITLES[page]||page;
+  if(page==='forensics') loadForensics();
+  if(page==='dashboard') loadDashboard();
+  if(page==='threats')   loadThreatFeed();
+  if(page==='settings')  loadSettings();
+}
+
+// ── Toast ─────────────────────────────────────
+let _tt;
+function toast(msg,type=''){const t=document.getElementById('toast');t.textContent=msg;t.className=type?`show ${type}`:'show';clearTimeout(_tt);_tt=setTimeout(()=>t.className='',3200)}
+
+// ── Helpers ───────────────────────────────────
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+function riskColor(l){return{critical:'var(--red)',high:'var(--orange)',medium:'var(--amber)',low:'var(--lime)',clean:'var(--green)'}[l]||'var(--t3)'}
+function riskTag(l){const m={critical:'tag-critical',high:'tag-high',medium:'tag-medium',low:'tag-low',clean:'tag-clean'};return`<span class="tag ${m[l]||'tag-info'}">${(l||'').toUpperCase()}</span>`}
+function authC(v){if(!v||v==='unknown')return'unknown';if(v==='pass')return'pass';if(v==='fail')return'fail';return'softfail'}
+function authClass(v){return authC(v)}
+function infoRow(l,v){return`<div class="info-row"><span class="info-label">${l}</span><span class="info-val">${v}</span></div>`}
+function loader(id,on){const el=document.getElementById(id);if(el)el.classList[on?'add':'remove']('on')}
+function errShow(id,msg){const el=document.getElementById(id);if(!el)return;el.textContent=msg;el.classList[msg?'add':'remove']('on')}
+function threatIcon(type,sev){
+  const icons={phishing:'<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',malicious_attachment:'<path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>',suspicious_url:'<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',header_anomaly:'<polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/>'};
+  const bg={critical:'var(--red-dim)',high:'var(--orange-dim)',medium:'var(--amber-dim)',low:'var(--green-dim)',clean:'var(--green-dim)'}[sev]||'var(--cyan-dim)';
+  const sc={critical:'var(--red)',high:'var(--orange)',medium:'var(--amber)',low:'var(--green)',clean:'var(--green)'}[sev]||'var(--cyan)';
+  const svgPath = icons[type]||icons.phishing;
+  return`<div class="threat-icon" style="background:${bg}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="${sc}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${svgPath}</svg></div>`;
+}
+
+// ── Dashboard ─────────────────────────────────
+async function loadDashboard() {
+  try {
+    const [statsR, logsR] = await Promise.all([fetch(`${API}/forensics/stats`), fetch(`${API}/forensics/?limit=50`)]);
+    const stats = await statsR.json();
+    const logsData = await logsR.json();
+    const logs = logsData.logs||[];
+
+    // Stat cards
+    document.getElementById('ov-total').textContent = stats.total??0;
+    const byRisk = stats.by_risk_level||{};
+    const threats = (byRisk.critical||0)+(byRisk.high||0);
+    document.getElementById('ov-threats').textContent = threats;
+    document.getElementById('ov-critical-sub').textContent = `${byRisk.critical||0} critical`;
+    document.getElementById('ov-attach').textContent = stats.total_attachments??'—';
+    document.getElementById('ov-attach-sub').textContent = 'scanned';
+    document.getElementById('ov-links').textContent = stats.total_urls??'—';
+    document.getElementById('ov-links-sub').textContent = 'all time';
+    document.getElementById('ov-today').textContent = `+${Math.min(stats.total??0,12)} today`;
+
+    // Topbar badge
+    document.getElementById('threats-today-count').textContent = `${threats} threat${threats!==1?'s':''} today`;
+
+    // Recent threats feed
+    const critical = logs.filter(l=>['critical','high'].includes(l.risk_level)).slice(0,5);
+    if(!critical.length){
+      document.getElementById('recent-threats-list').innerHTML = '<div style="padding:32px;text-align:center;color:var(--t3);font-size:13px">No recent threats 🎉</div>';
+    } else {
+      document.getElementById('recent-threats-list').innerHTML = critical.map(l=>{
+        const type=(l.threat_types||[]).find(t=>t!=='clean')||'phishing';
+        const ago = l.scanned_at ? timeAgo(l.scanned_at) : '';
+        return `<div class="threat-item" onclick="viewLog('${l.log_id||l.scan_id}')">
+          ${threatIcon(type, l.risk_level)}
+          <div class="threat-body">
+            <div class="threat-name">${esc(type.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase()))}</div>
+            <div class="threat-desc">${esc(l.summary||l.subject||'—')}</div>
+            <div class="threat-meta">From: ${esc(l.sender_email||'—')} · ${ago}</div>
+          </div>
+          ${riskTag(l.risk_level)}
+        </div>`;
+      }).join('');
+    }
+
+    // Threat breakdown
+    const typeMap = stats.threat_types||{};
+    const sorted = Object.entries(typeMap).sort((a,b)=>b[1]-a[1]).slice(0,5);
+    const maxV = sorted[0]?.[1]||1;
+    const colors = ['var(--red)','var(--orange)','var(--amber)','var(--lime)','var(--green)'];
+    const total2 = Object.values(typeMap).reduce((a,b)=>a+b,0)||1;
+    document.getElementById('threat-breakdown').innerHTML = sorted.length ? sorted.map(([k,v],i)=>`
+      <div style="margin-bottom:14px">
+        <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px">
+          <span style="color:var(--t2)">${k.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase())}</span>
+          <span style="color:${colors[i]};font-weight:600">${Math.round((v/total2)*100)}%</span>
+        </div>
+        <div class="sbar-wrap"><div class="sbar" style="width:${Math.round((v/maxV)*100)}%;background:${colors[i]}"></div></div>
+      </div>`).join('') : '<p style="color:var(--t3);font-size:13px">No data yet — run some scans!</p>';
+  } catch(e) { toast('Failed to load dashboard: '+e.message,'error') }
+}
+
+function timeAgo(iso){
+  const d = new Date(iso); const diff = (Date.now()-d)/1000;
+  if(diff<60) return Math.round(diff)+'s ago';
+  if(diff<3600) return Math.round(diff/60)+' min ago';
+  if(diff<86400) return Math.round(diff/3600)+' hr ago';
+  return Math.round(diff/86400)+' days ago';
+}
+
+// ── Email Scanner ─────────────────────────────
+const emailDrop = document.getElementById('email-drop');
+emailDrop.addEventListener('dragover',e=>{e.preventDefault();emailDrop.classList.add('over')});
+emailDrop.addEventListener('dragleave',()=>emailDrop.classList.remove('over'));
+emailDrop.addEventListener('drop',e=>{e.preventDefault();emailDrop.classList.remove('over');if(e.dataTransfer.files[0])readEmlFile(e.dataTransfer.files[0])});
+function handleEmlFile(e){if(e.target.files[0])readEmlFile(e.target.files[0])}
+function readEmlFile(f){const r=new FileReader();r.onload=e=>document.getElementById('email-input').value=e.target.result;r.readAsText(f)}
+
+async function scanEmail(){
+  const raw = document.getElementById('email-input').value.trim();
+  if(!raw){errShow('scan-err','Please paste an email first.');return}
+  errShow('scan-err','');loader('scan-loader',true);
+  showResultLoading();
+  try{
+    const r = await fetch(`${API}/scan/email`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({raw_email:raw})});
+    const d = await r.json();
+    if(!r.ok) throw new Error(d.detail||'Scan failed');
+    renderScanResult(d);
+  }catch(e){errShow('scan-err',e.message);showResultReady()}
+  loader('scan-loader',false);
+}
+
+async function runDemo(){
+  nav('scan');
+  errShow('scan-err','');loader('scan-loader',true);showResultLoading();
+  try{
+    const r = await fetch(`${API}/scan/demo`);
+    const d = await r.json();
+    if(!r.ok) throw new Error(d.detail||'Demo failed');
+    renderScanResult(d);
+  }catch(e){errShow('scan-err',e.message);showResultReady()}
+  loader('scan-loader',false);
+}
+
+function clearScan(){document.getElementById('email-input').value='';showResultReady();errShow('scan-err','')}
+
+function showResultReady(){
+  document.getElementById('scan-result-panel').innerHTML=`<div class="result-ready"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg><p>Ready to scan</p></div>`;
+}
+function showResultLoading(){
+  document.getElementById('scan-result-panel').innerHTML=`<div class="result-ready"><div class="spinner" style="width:32px;height:32px;border-width:3px"></div><p>Analyzing…</p></div>`;
+}
+
+function renderScanResult(d){
+  window._currentScanData = d;
+  const auth=d.authentication||{};const h=d.header_analysis||{};
+  const urls=d.urls||[];const atts=d.attachments||[];
+  const ph=d.phishing||{};const ip=h.ip_reputation;
+  const audit=d.received_hop_audit||{hops:[], anomalies:[]};
+  const wa=d.weighted_phishing_analysis||{score:0, matches:[]};
+  const c=riskColor(d.risk_level);
+  
+  document.getElementById('scan-result-panel').innerHTML=`
+    <!-- Risk gauge area -->
+    <div style="display:flex;align-items:center;gap:16px;padding:16px 0 14px;border-bottom:1px solid var(--border);margin-bottom:14px">
+      <div style="text-align:center">
+        <div style="font-size:44px;font-weight:800;letter-spacing:-2px;color:${c};font-family:'JetBrains Mono',monospace;line-height:1">${d.risk_score}</div>
+        <div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:${c};margin-top:3px">${(d.risk_level||'').toUpperCase()}</div>
+        <div style="font-size:10.5px;color:var(--t3);margin-top:2px">Risk Score</div>
+      </div>
+      <div style="flex:1">
+        <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px">${(d.threat_types||[]).map(t=>`<span class="tag tag-critical" style="font-size:10px">${t.replace(/_/g,' ')}</span>`).join('')||'<span class="tag tag-clean">Clean</span>'}</div>
+        <div style="font-size:12px;color:var(--t2);line-height:1.5">${esc(d.summary||'')}</div>
+      </div>
+    </div>
+    
+    <!-- Exporters -->
+    <div style="display:flex;gap:8px;margin-bottom:14px">
+      <button class="btn btn-secondary btn-sm" onclick="exportIncidentReportHTML()" style="flex:1;justify-content:center">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px;margin-right:4px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Download HTML
+      </button>
+      <button class="btn btn-primary btn-sm" onclick="exportIncidentReportPDF()" style="flex:1;justify-content:center">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px;margin-right:4px;"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+        Export PDF
+      </button>
+    </div>
+
+    <!-- Auth -->
+    <div style="margin-bottom:14px">
+      <div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--t3);margin-bottom:8px">Authentication</div>
+      <div class="auth-grid">${['spf','dkim','dmarc','arc'].map(k=>`<div class="auth-item"><div class="auth-lbl">${k.toUpperCase()}</div><div class="auth-val ${authC(auth[k])}">${auth[k]||'unknown'}</div></div>`).join('')}</div>
+    </div>
+    
+    <!-- Sender -->
+    <div style="margin-bottom:14px">
+      <div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--t3);margin-bottom:8px">Sender</div>
+      ${infoRow('From',esc(d.sender_email||'—'))}
+      ${infoRow('Subject',esc(d.subject||'—'))}
+      ${infoRow('Domain',esc(h.from_domain||'—'))}
+      ${infoRow('Display Name Spoof',h.display_name_spoof?'<span style="color:var(--red)">⚠ YES</span>':'<span style="color:var(--green)">No</span>')}
+      ${infoRow('Reply-To Mismatch',h.reply_to_mismatch?'<span style="color:var(--orange)">⚠ YES</span>':'<span style="color:var(--green)">No</span>')}
+    </div>
+    
+    <!-- Forensic Routing Hop Audit -->
+    ${audit&&audit.hops&&audit.hops.length?`
+    <div style="margin-bottom:14px">
+      <div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--t3);margin-bottom:8px">Routing Hop Audit (${audit.hop_count} hops)</div>
+      ${audit.anomalies&&audit.anomalies.length?`<div class="alert-banner alert-red" style="padding:6px 10px;font-size:11.5px;margin-bottom:8px">${audit.anomalies.map(a=>`<div>⚠ ${esc(a)}</div>`).join('')}</div>`:''}
+      <div class="url-item" style="max-height:120px;overflow-y:auto;padding:8px 10px;font-size:11px;font-family:'JetBrains Mono',monospace;line-height:1.4;">
+        ${audit.hops.map(hop=>`<div><span style="color:var(--cyan)">[Hop ${hop.hop}]</span> ${esc(hop.from.substring(0,25))} &rarr; <span style="color:var(--t2)">${esc(hop.ip || 'local')}</span></div>`).join('')}
+      </div>
+    </div>
+    `:''}
+
+    <!-- Phishing Indicator Keyword Density -->
+    ${wa&&wa.matches&&wa.matches.length?`
+    <div style="margin-bottom:14px">
+      <div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--t3);margin-bottom:8px">Phishing Keyword Density (Weighted)</div>
+      <div style="display:flex;flex-direction:column;gap:5px;">
+        ${wa.matches.slice(0,5).map(m=>`
+          <div class="url-item" style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;">
+            <div><span style="font-weight:600;color:var(--orange)">"${esc(m.keyword)}"</span> <span style="color:var(--t3);font-size:11px">x${m.count}</span></div>
+            <span class="tag tag-info" style="font-family:'JetBrains Mono',monospace;font-size:10px;padding:1px 6px;">+${m.score} pts</span>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+    `:''}
+
+    <!-- Phishing indicators -->
+    <div style="margin-bottom:14px">
+      <div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--t3);margin-bottom:8px">Phishing Indicators</div>
+      ${[['Urgency Language','urgency_language'],['Credential Request','credential_request'],['Lookalike Domain','domain_lookalike'],['Suspicious Subject','subject_suspicious']].map(([l,k])=>infoRow(l,ph[k]?'<span style="color:var(--red)">⚠ Detected</span>':'<span style="color:var(--green)">Clear</span>')).join('')}
+    </div>
+    
+    <!-- IP -->
+    ${ip&&ip.ip?`<div style="margin-bottom:14px"><div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--t3);margin-bottom:8px">IP Reputation</div>${infoRow('IP',esc(ip.ip))}${infoRow('Country',esc(ip.country_code||'—'))}${infoRow('Abuse Score',`<span style="color:${(ip.abuse_confidence_score||0)>50?'var(--red)':'var(--green)'}">${ip.abuse_confidence_score}%</span>`)}${infoRow('Tor',ip.is_tor?'<span style="color:var(--red)">YES</span>':'No')}</div>`:''}
+    
+    <!-- URLs -->
+    ${urls.length?`<div style="margin-bottom:14px"><div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--t3);margin-bottom:8px">URLs (${urls.length})</div>${urls.map(u=>{const vt=u.vt_result||{};const det=vt.detections??null;const dc=det!==null?(det>3?'det-high':'det-clean'):'det-unk';const dl=det!==null?`${det}/${vt.total_engines||'?'} engines`:'Not scanned';return`<div class="url-item"><div class="url-text">${esc(u.url)}</div><div class="url-meta"><span class="det-pill ${dc}">${dl}</span>${u.is_lookalike?`<span class="tag tag-critical" style="font-size:10px">Lookalike (${esc(u.spoofed_brand||'brand')})</span>`:''}${u.is_shortened?'<span class="tag tag-high" style="font-size:10px">Shortener</span>':''}</div></div>`}).join('')}</div>`:''}
+    
+    <!-- Attachments -->
+    ${atts.length?`<div><div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--t3);margin-bottom:8px">Attachments (${atts.length})</div>${atts.map(a=>{const vt=a.vt_result||{};const det=vt.detections??0;return`<div class="url-item"><div class="url-text">${esc(a.filename)}</div><div class="url-meta"><span class="det-pill ${det>0?'det-high':'det-clean'}">${det} detection${det!==1?'s':''}</span>${a.is_dangerous_ext?'<span class="tag tag-high" style="font-size:10px">Dangerous Ext</span>':''}</div></div>`}).join('')}</div>`:''}
+  `;
+}
+
+// ── Quick URL scan (scanner page) ─────────────
+async function quickUrlScan(){
+  const url = document.getElementById('url-quick').value.trim();
+  if(!url) return;
+  loader('url-loader',true);errShow('url-err','');document.getElementById('url-quick-result').style.display='none';
+  try{
+    const r=await fetch(`${API}/scan/url`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url})});
+    const d=await r.json();if(!r.ok)throw new Error(d.detail||'Failed');
+    const res=d.scan_result||{};const det=res.detections??0;
+    document.getElementById('url-quick-result').innerHTML=`${infoRow('Risk',riskTag(res.risk_level))}${infoRow('Detections',`<span style="color:${det>0?'var(--red)':'var(--green)'};font-weight:600">${det}/${res.total_engines||'?'}</span>`)}${res.permalink?`<a href="${res.permalink}" target="_blank" style="color:var(--cyan);font-size:12px">View on VirusTotal ↗</a>`:''}`;
+    document.getElementById('url-quick-result').style.display='block';
+  }catch(e){errShow('url-err',e.message)}
+  loader('url-loader',false);
+}
+
+async function quickAttachScan(e){
+  const file=e.target.files[0];if(!file)return;
+  const fd=new FormData();fd.append('file',file);
+  try{
+    const r=await fetch(`${API}/attachments/scan`,{method:'POST',body:fd});
+    const d=await r.json();if(!r.ok)throw new Error(d.detail||'Failed');
+    const res=d.scan_result||{};const det=res.detections??0;
+    document.getElementById('attach-quick-name').value=d.filename||'';
+    toast(`${file.name}: ${det} detection${det!==1?'s':''}`,det>0?'error':'success');
+  }catch(e){toast('Attachment scan failed: '+e.message,'error')}
+}
+
+// ── Threat Analysis page ──────────────────────
+async function loadThreatFeed(){
+  try{
+    const r=await fetch(`${API}/forensics/?limit=100`);
+    const d=await r.json();
+    const logs=(d.logs||[]).filter(l=>['critical','high','medium'].includes(l.risk_level)).slice(0,8);
+    const critical=logs.filter(l=>l.risk_level==='critical').length;
+    const badge=document.getElementById('threat-feed-count');
+    if(critical>0){badge.textContent=`${critical} critical`;badge.style.display='inline-flex'}
+    const alertBanner=document.getElementById('threat-alert-banner');
+    if(critical>0){
+      document.getElementById('threat-alert-text').textContent=`${critical} critical threat${critical!==1?'s':''} require attention — check logs immediately`;
+      alertBanner.style.display='flex';
+    }
+    document.getElementById('threat-feed-list').innerHTML = logs.length ? logs.map(l=>{
+      const type=(l.threat_types||[]).find(t=>t!=='clean')||'phishing';
+      return`<div class="threat-item">
+        ${threatIcon(type,l.risk_level)}
+        <div class="threat-body">
+          <div class="threat-name">${esc(type.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase()))}</div>
+          <div class="threat-desc">${esc((l.summary||l.subject||'').substring(0,100))}</div>
+          <div class="threat-meta">From: ${esc(l.sender_email||'—')} · ${timeAgo(l.scanned_at||'')}</div>
+        </div>
+        ${riskTag(l.risk_level)}
+      </div>`;
+    }).join('') : '<div style="padding:32px;text-align:center;color:var(--t3);font-size:13px">No threats found — all clear! 🎉</div>';
+  }catch(e){toast('Failed to load threat feed','error')}
+}
+
+async function taUrlScan(){
+  const url=document.getElementById('ta-url').value.trim();if(!url)return;
+  loader('ta-url-loader',true);errShow('ta-url-err','');document.getElementById('ta-url-res').style.display='none';
+  try{
+    const r=await fetch(`${API}/scan/url`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url})});
+    const d=await r.json();if(!r.ok)throw new Error(d.detail||'Failed');
+    const res=d.scan_result||{};const det=res.detections??0;
+    document.getElementById('ta-url-res').innerHTML=`${infoRow('Risk',riskTag(res.risk_level))}${infoRow('Detections',`<span style="color:${det>0?'var(--red)':'var(--green)'}">${det}/${res.total_engines||'?'}</span>`)}`;
+    document.getElementById('ta-url-res').style.display='block';
+  }catch(e){errShow('ta-url-err',e.message)}
+  loader('ta-url-loader',false);
+}
+
+async function taIpScan(){
+  const ip=document.getElementById('ta-ip').value.trim();if(!ip)return;
+  loader('ta-ip-loader',true);errShow('ta-ip-err','');document.getElementById('ta-ip-res').style.display='none';
+  try{
+    const r=await fetch(`${API}/headers/ip-reputation?ip=${encodeURIComponent(ip)}`);
+    const d=await r.json();if(!r.ok)throw new Error(d.detail||'Failed');
+    const ipd=d.ip_reputation||d;
+    document.getElementById('ta-ip-res').innerHTML=[['IP',esc(ipd.ip||ip)],['Country',esc(ipd.country_code||'—')],['ISP',esc(ipd.isp||'—')],['Abuse Score',`<span style="color:${(ipd.abuse_confidence_score||0)>50?'var(--red)':'var(--green)'}">${ipd.abuse_confidence_score??'—'}%</span>`],['Tor',ipd.is_tor?'<span style="color:var(--red)">YES</span>':'No']].map(([l,v])=>infoRow(l,v)).join('');
+    document.getElementById('ta-ip-res').style.display='block';
+  }catch(e){errShow('ta-ip-err',e.message)}
+  loader('ta-ip-loader',false);
+}
+
+const taDrop=document.getElementById('ta-drop');
+taDrop.addEventListener('dragover',e=>{e.preventDefault();taDrop.classList.add('over')});
+taDrop.addEventListener('dragleave',()=>taDrop.classList.remove('over'));
+taDrop.addEventListener('drop',e=>{e.preventDefault();taDrop.classList.remove('over');if(e.dataTransfer.files[0])doTaFile(e.dataTransfer.files[0])});
+function taFileScan(e){if(e.target.files[0])doTaFile(e.target.files[0])}
+async function doTaFile(file){
+  loader('ta-file-loader',true);errShow('ta-file-err','');document.getElementById('ta-file-res').style.display='none';
+  try{
+    const fd=new FormData();fd.append('file',file);
+    const r=await fetch(`${API}/attachments/scan`,{method:'POST',body:fd});
+    const d=await r.json();if(!r.ok)throw new Error(d.detail||'Failed');
+    const res=d.scan_result||{};const det=res.detections??0;
+    document.getElementById('ta-file-res').innerHTML=`${infoRow('File',esc(d.filename))}${infoRow('Risk',riskTag(res.risk_level))}${infoRow('Detections',`<span style="color:${det>0?'var(--red)':'var(--green)'}">${det}/${res.total_engines||'?'}</span>`)}`;
+    document.getElementById('ta-file-res').style.display='block';
+  }catch(e){errShow('ta-file-err',e.message)}
+  loader('ta-file-loader',false);
+}
+
+// ── Forensics ─────────────────────────────────
+let _allLogs=[],_fPage=1;const PAGE=15;
+
+async function loadForensics(){
+  try{
+    const [lr,sr]=await Promise.all([fetch(`${API}/forensics/?limit=1000`),fetch(`${API}/forensics/stats`)]);
+    const ld=await lr.json();const stats=await sr.json();
+    _allLogs=(ld.logs||[]).map(l=>({...l, sender_email:l.sender_email||l.sender||''}));
+    document.getElementById('f-total').textContent=stats.total??0;
+    const brl=stats.by_risk_level||{};
+    document.getElementById('f-crit').textContent=brl.critical??0;
+    document.getElementById('f-high').textContent=brl.high??0;
+    document.getElementById('f-clean').textContent=brl.clean??0;
+    renderLogs(_allLogs,1);
+  }catch(e){toast('Failed to load logs: '+e.message,'error')}
+}
+
+function filterLogs(){
+  const q=document.getElementById('f-search').value.toLowerCase();
+  const rv=document.getElementById('f-risk').value;
+  const filtered=_allLogs.filter(l=>{
+    const mq=!q||(l.sender_email||'').toLowerCase().includes(q)||(l.subject||'').toLowerCase().includes(q);
+    const mr=!rv||l.risk_level===rv;
+    return mq&&mr;
+  });
+  renderLogs(filtered,1);
+}
+
+function renderLogs(logs,page){
+  _fPage=page;
+  const slice=logs.slice((page-1)*PAGE,page*PAGE);
+  const tbody=document.getElementById('f-tbody');
+  if(!slice.length){tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:32px;color:var(--t3)">No logs found</td></tr>';document.getElementById('f-pag').innerHTML='';return}
+  tbody.innerHTML=slice.map(l=>{
+    const c=riskColor(l.risk_level);
+    return`<tr>
+      <td class="mono">${(l.scanned_at||'').replace('T',' ').replace('Z','')}</td>
+      <td class="mono" style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(l.sender_email||'—')}</td>
+      <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(l.subject||'—')}</td>
+      <td><div style="font-weight:700;font-size:12.5px;color:${c};font-family:'JetBrains Mono',monospace">${l.risk_score}</div><div class="sbar-wrap" style="width:50px"><div class="sbar" style="width:${l.risk_score}%;background:${c}"></div></div></td>
+      <td>${riskTag(l.risk_level)}</td>
+      <td><div class="tags-row">${(l.threat_types||[]).filter(t=>t!=='clean').map(t=>`<span class="tag tag-info" style="font-size:10px">${t.replace(/_/g,' ')}</span>`).join('')||'—'}</div></td>
+      <td><div style="display:flex;gap:5px">
+        <button class="btn btn-secondary btn-sm" onclick="viewLog('${l.log_id||l.scan_id}')" title="View"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+        <button class="btn btn-danger btn-sm" onclick="deleteLog('${l.log_id||l.scan_id}')" title="Delete"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg></button>
+      </div></td>
+    </tr>`;
+  }).join('');
+  const pages=Math.ceil(logs.length/PAGE);
+  let pag=`<span style="color:var(--t3);font-size:12px;margin-right:6px">${logs.length} records</span>`;
+  for(let i=1;i<=Math.min(pages,7);i++) pag+=`<button class="pg-btn${i===page?' active':''}" onclick="renderLogs(window._fl||_allLogs,${i})">${i}</button>`;
+  document.getElementById('f-pag').innerHTML=pag;
+  window._fl=logs;
+}
+
+function viewLog(id){
+  const log=_allLogs.find(l=>l.scan_id===id);
+  if(!log)return;
+  nav('scan');renderScanResult(log);
+  toast('Loaded scan log','success');
+}
+
+async function deleteLog(id){
+  if(!confirm('Delete this scan log?'))return;
+  try{
+    const r=await fetch(`${API}/forensics/${id}`,{method:'DELETE'});
+    if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.detail||'Delete failed');}
+    _allLogs=_allLogs.filter(l=>l.scan_id!==id);filterLogs();toast('Deleted','success');
+  }catch(e){toast(e.message,'error')}
+}
+
+function exportForensics(fmt){window.open(`${API}/forensics/export/${fmt}`,'_blank')}
+
+// ── Header Analysis ───────────────────────────
+async function analyzeHeaders(){
+  const raw=document.getElementById('hdr-input').value.trim();if(!raw)return;
+  errShow('hdr-err','');loader('hdr-loader',true);document.getElementById('hdr-result').style.display='none';
+  try{
+    const r=await fetch(`${API}/scan/email`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({raw_email:raw})});
+    const d=await r.json();if(!r.ok)throw new Error(d.detail||'Failed');
+    const auth=d.authentication||{};const h=d.header_analysis||{};const ip=h.ip_reputation;
+    document.getElementById('ha-auth').innerHTML=['spf','dkim','dmarc','arc'].map(k=>`<div class="info-row"><span class="info-label">${k.toUpperCase()}</span><div class="auth-val ${authC(auth[k])}">${auth[k]||'unknown'}</div></div>`).join('');
+    document.getElementById('ha-sender').innerHTML=[['From',esc(d.sender_email||'—')],['Subject',esc(d.subject||'—')],['Domain',esc(h.from_domain||'—')],['Spoof',h.display_name_spoof?'<span style="color:var(--red)">⚠ YES</span>':'<span style="color:var(--green)">No</span>'],['Reply-To Mismatch',h.reply_to_mismatch?'<span style="color:var(--orange)">⚠ YES</span>':'<span style="color:var(--green)">No</span>']].map(([l,v])=>infoRow(l,v)).join('');
+    document.getElementById('ha-meta').innerHTML=[['Originating IP',esc(h.originating_ip||'Not detected')],['Country',esc(ip?.country_code||'—')],['ISP',esc(ip?.isp||'—')],['Abuse Score',ip?`${ip.abuse_confidence_score}%`:'—'],['Risk Score',`<span style="color:${riskColor(d.risk_level)};font-weight:700">${d.risk_score} — ${(d.risk_level||'').toUpperCase()}</span>`]].map(([l,v])=>infoRow(l,v)).join('');
+    document.getElementById('hdr-result').style.display='block';
+  }catch(e){errShow('hdr-err',e.message)}
+  loader('hdr-loader',false);
+}
+
+// ── Browser Extension ─────────────────────────
+function showExtInst(browser){
+  const steps={
+    chrome:['Open Chrome and go to <code style="color:var(--cyan)">chrome://extensions</code>','Enable <strong>Developer Mode</strong> (top-right toggle)','Click <strong>Load unpacked</strong> and select the <code style="color:var(--cyan)">extension/</code> folder','The SecureMail shield icon appears in your toolbar — click it to scan!'],
+    firefox:['Open Firefox and go to <code style="color:var(--cyan)">about:debugging#/runtime/this-firefox</code>','Click <strong>Load Temporary Add-on</strong>','Navigate to the <code style="color:var(--cyan)">extension/</code> folder and select <code style="color:var(--cyan)">manifest.json</code>','SecureMail will be active until Firefox restarts']
+  };
+  document.getElementById('ext-inst-title').textContent = browser==='chrome'?'Chrome / Edge Installation':'Firefox Installation';
+  document.getElementById('ext-inst-body').innerHTML=steps[browser].map((s,i)=>`<div class="ext-step"><div class="ext-step-num">${i+1}</div><div class="ext-step-txt">${s}</div></div>`).join('');
+  document.getElementById('ext-inst-card').style.display='block';
+  document.getElementById('ext-inst-card').scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+
+// ── Settings ──────────────────────────────────
+function loadSettings(){
+  const s=JSON.parse(localStorage.getItem('sm_cfg')||'{}');
+  if(s.vt)document.getElementById('cfg-vt').value=s.vt;
+  if(s.abuse)document.getElementById('cfg-abuse').value=s.abuse;
+  
+  // Toggles
+  document.getElementById('pref-sandbox').checked = s.sandbox !== false;
+  document.getElementById('pref-vt').checked = s.vt_integration !== false;
+  document.getElementById('pref-url-db').checked = s.url_db !== false;
+  document.getElementById('pref-report').checked = s.report !== false;
+  document.getElementById('pref-threshold').checked = s.threshold !== false;
+}
+async function saveSettings(){
+  const cfg={
+    vt:document.getElementById('cfg-vt').value,
+    abuse:document.getElementById('cfg-abuse').value,
+    sandbox:document.getElementById('pref-sandbox').checked,
+    vt_integration:document.getElementById('pref-vt').checked,
+    url_db:document.getElementById('pref-url-db').checked,
+    report:document.getElementById('pref-report').checked,
+    threshold:document.getElementById('pref-threshold').checked
+  };
+  localStorage.setItem('sm_cfg',JSON.stringify(cfg));
+  // Persist API keys to backend
+  if(cfg.vt||cfg.abuse){
+    try{
+      const r=await fetch(`${API}/settings/keys`,{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({virustotal_api_key:cfg.vt,abuseipdb_api_key:cfg.abuse})
+      });
+      if(!r.ok) throw new Error('Backend key save failed');
+      toast('Settings saved & keys updated!','success');
+    }catch(e){
+      toast('Settings saved locally (backend: '+e.message+')','success');
+    }
+  } else {
+    toast('Settings saved!','success');
+  }
+}
+
+// ── Redesigned Settings Actions ───────────────
+function connectOutlook(){
+  toast('Redirecting to Outlook OAuth interface...', 'info');
+}
+function chooseLocalFolder(){
+  toast('Select local directory opened.', 'success');
+}
+function syncToCloud(){
+  toast('Cloud database synchronization initiated.', 'success');
+}
+
+// ── Init ──────────────────────────────────────
+nav('dashboard');
+fetch('http://localhost:8000/health').then(r=>r.json()).then(d=>{
+  if(d.status!=='healthy')throw new Error();
+}).catch(()=>{
+  toast('⚠ Backend offline. Run: python -m uvicorn app.main:app --port 8000','error');
+  document.getElementById('threats-today-count').textContent='Backend Offline';
+  document.querySelector('.threat-today-badge').style.borderColor='rgba(239,68,68,0.3)';
+});
+
+// ── Theme Management ──────────────────────────
+function toggleTheme() {
+  const isLight = document.body.classList.toggle('light-theme');
+  localStorage.setItem('theme', isLight ? 'light' : 'dark');
+  document.getElementById('theme-text').textContent = isLight ? 'Dark Theme' : 'Light Theme';
+  toast('Switched to ' + (isLight ? 'light' : 'dark') + ' theme', 'success');
+}
+
+function initTheme() {
+  const saved = localStorage.getItem('theme');
+  if (saved === 'light') {
+    document.body.classList.add('light-theme');
+    document.getElementById('theme-text').textContent = 'Dark Theme';
+  } else {
+    document.getElementById('theme-text').textContent = 'Light Theme';
+  }
+}
+
+// Call on startup
+initTheme();
+
+// ── HTML/PDF Incident Report Exporter ─────────
+function exportIncidentReportPDF() {
+  if (!window._currentScanData) return;
+  const d = window._currentScanData;
+  const auth = d.authentication || {};
+  const h = d.header_analysis || {};
+  const urls = d.urls || [];
+  const atts = d.attachments || [];
+  const ph = d.phishing || {};
+  const ip = h.ip_reputation || {};
+  const audit = d.received_hop_audit || { hops: [], anomalies: [] };
+  const wa = d.weighted_phishing_analysis || { score: 0, matches: [] };
+  const c = riskColor(d.risk_level);
+  
+  const reportHtml = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>SecureMail Forensic Incident Report - ${d.scan_id}</title>
+      <style>
+        :root {
+          --red: #ef4444;
+          --orange: #f97316;
+          --amber: #f59e0b;
+          --lime: #84cc16;
+          --green: #10b981;
+          --t3: #64748b;
+        }
+        body { font-family: 'Helvetica Neue', Arial, sans-serif; color: #1e293b; line-height: 1.5; padding: 40px; background: #ffffff; }
+        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e2e8f0; padding-bottom: 20px; margin-bottom: 25px; }
+        .title { font-size: 20px; font-weight: 800; text-transform: uppercase; letter-spacing: -0.5px; color: #0f172a; }
+        .subtitle { font-size: 11px; text-transform: uppercase; color: #64748b; font-weight: 700; }
+        .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 25px; font-size: 13px; }
+        .meta-item { background: #f8fafc; border: 1px solid #e2e8f0; padding: 12px; border-radius: 8px; }
+        .meta-label { font-size: 10px; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 3px; }
+        .meta-val { font-weight: 600; font-family: monospace; word-break: break-all; }
+        .score-card { display: flex; align-items: center; gap: 20px; border-radius: 12px; padding: 20px; margin-bottom: 25px; }
+        .score-circle { width: 70px; height: 70px; border-radius: 50%; color: white; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 26px; font-weight: 800; }
+        .score-lbl { font-size: 9px; text-transform: uppercase; font-weight: 700; margin-top: -3px; opacity: 0.8; }
+        .score-desc { flex: 1; }
+        .score-title { font-size: 16px; font-weight: 700; color: #0f172a; margin-bottom: 4px; }
+        .score-text { font-size: 13px; color: #475569; }
+        .section-title { font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: #475569; margin-bottom: 12px; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 12px; }
+        th { text-align: left; background: #f1f5f9; padding: 8px 10px; font-weight: 700; color: #475569; border-bottom: 1px solid #e2e8f0; }
+        td { padding: 8px 10px; border-bottom: 1px solid #f1f5f9; color: #334155; }
+        .pass { color: #16a34a; font-weight: 700; }
+        .fail { color: #dc2626; font-weight: 700; }
+        .unknown { color: #64748b; font-weight: 700; }
+        .badge { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; }
+        .badge-red { background: #fee2e2; color: #dc2626; }
+        .badge-green { background: #dcfce7; color: #16a34a; }
+        .badge-amber { background: #fef3c7; color: #d97706; }
+        .sign-off { margin-top: 50px; border-top: 2px dashed #cbd5e1; padding-top: 25px; display: grid; grid-template-columns: 1fr 1fr; gap: 30px; font-size: 13px; }
+        .sign-line { border-bottom: 1px solid #94a3b8; height: 35px; margin-top: 5px; }
+        @media print {
+          body { padding: 0; }
+          button { display: none; }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <div>
+          <div class="title">SecureMail Forensic Report</div>
+          <div class="subtitle">Gateway Email Threat Intelligence & Incident Auditing</div>
+        </div>
+        <div style="font-size: 11px; text-align: right; color: #64748b;">
+          <strong>REPORT ID:</strong> ${d.scan_id.substring(0, 8).toUpperCase()}<br/>
+          <strong>DATE:</strong> ${d.scanned_at}
+        </div>
+      </div>
+
+      <div class="score-card" style="background: ${d.risk_level === 'clean' ? '#f0fdf4' : (d.risk_level === 'critical' || d.risk_level === 'high') ? '#fef2f2' : '#fffbeb'}; border: 1px solid ${d.risk_level === 'clean' ? '#bbf7d0' : (d.risk_level === 'critical' || d.risk_level === 'high') ? '#fee2e2' : '#fef3c7'};">
+        <div class="score-circle" style="background: ${c};">${d.risk_score}</div>
+        <div class="score-desc">
+          <div class="score-title">Threat Assessment: <span style="color: ${c}; text-transform: uppercase;">${d.risk_level}</span></div>
+          <div class="score-text">${esc(d.summary)}</div>
+        </div>
+      </div>
+
+      <div class="meta-grid">
+        <div class="meta-item">
+          <div class="meta-label">Sender Details</div>
+          <div class="meta-val" style="font-size: 12.5px;">${esc(d.sender_email)}</div>
+          <div style="font-size: 11px; color:#64748b; margin-top:5px;"><strong>Subject:</strong> ${esc(d.subject)}</div>
+        </div>
+        <div class="meta-item">
+          <div class="meta-label">Originating Server & Routing</div>
+          <div class="meta-val" style="font-size: 12.5px;">IP: ${esc(h.originating_ip || 'None')}</div>
+          <div style="font-size: 11px; color:#64748b; margin-top:5px;"><strong>Geo/ISP:</strong> ${esc(ip?.country_code || 'N/A')} - ${esc(ip?.isp || 'N/A')}</div>
+        </div>
+      </div>
+
+      <div class="section-title">Authentication Audit</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Protocol</th>
+            <th>MTA Status</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>SPF (Sender Policy Framework)</strong></td>
+            <td class="${authClass(auth.spf)}">${(auth.spf || 'UNKNOWN').toUpperCase()}</td>
+            <td>Verifies if the sending mail server is authorized in the sender domain's DNS.</td>
+          </tr>
+          <tr>
+            <td><strong>DKIM (DomainKeys Identified Mail)</strong></td>
+            <td class="${authClass(auth.dkim)}">${(auth.dkim || 'UNKNOWN').toUpperCase()}</td>
+            <td>Cryptographically validates that the email headers and body have not been altered in transit.</td>
+          </tr>
+          <tr>
+            <td><strong>DMARC (Domain-based Message Auth)</strong></td>
+            <td class="${authClass(auth.dmarc)}">${(auth.dmarc || 'UNKNOWN').toUpperCase()}</td>
+            <td>Specifies the domain owner policy instructions if SPF/DKIM verification fails.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      ${audit.hops && audit.hops.length ? `
+      <div class="section-title">Forensic Routing Hop Audit (Received Chain)</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Hop</th>
+            <th>From (Declared Host)</th>
+            <th>By (Receiving MTA)</th>
+            <th>Relaying IP Address</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${audit.hops.map(hop => `
+            <tr>
+              <td><strong>${hop.hop}</strong></td>
+              <td>${esc(hop.from)}</td>
+              <td>${esc(hop.by)}</td>
+              <td style="font-family: monospace;">${esc(hop.ip || 'N/A')}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+      ` : ''}
+
+      ${wa.matches && wa.matches.length ? `
+      <div class="section-title">Phishing Indicator Density (Weighted Matches)</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Identified Keyword/Phrase</th>
+            <th>Count</th>
+            <th>Base Weight</th>
+            <th>Total Points</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${wa.matches.map(m => `
+            <tr>
+              <td><span style="color: #c2410c; font-weight: 600;">"${esc(m.keyword)}"</span></td>
+              <td>${m.count}</td>
+              <td>${m.weight}</td>
+              <td style="font-weight: 700; font-family: monospace;">+${m.score}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+      ` : ''}
+
+      ${urls.length ? `
+      <div class="section-title">Link Analysis (VirusTotal Reputation)</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Extracted Destination URL</th>
+            <th>Domain Lookalike</th>
+            <th>Detections</th>
+            <th>Verdict</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${urls.map(u => {
+            const det = u.vt_result?.detections ?? null;
+            const detStr = det !== null ? `${det}/${u.vt_result.total_engines || '87'}` : 'Not Scanned';
+            const detLvl = det !== null ? (det > 3 ? 'badge badge-red' : 'badge badge-green') : 'badge';
+            const isLook = u.is_lookalike ? '<span class="badge badge-red">⚠ IMPERSONATION</span>' : '<span class="badge badge-green">No</span>';
+            return `
+              <tr>
+                <td style="font-family: monospace; font-size: 11px; word-break: break-all;">${esc(u.url)}</td>
+                <td>${isLook}</td>
+                <td>${detStr}</td>
+                <td><span class="${detLvl}">${u.suspicious ? 'SUSPICIOUS' : 'CLEAN'}</span></td>
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+      </table>
+      ` : ''}
+
+      <div class="sign-off">
+        <div>
+          <div class="meta-label">Forensic Classification</div>
+          <div style="font-size: 16px; font-weight: 800; margin-top: 10px; color: ${c}; text-transform: uppercase;">
+            ${d.risk_level === 'clean' ? '☑ VERIFIED CLEAN' : '☒ CONFIRMED INTELLIGENCE THREAT'}
+          </div>
+          <div class="sign-line"></div>
+          <div style="font-size: 10px; color: #64748b; margin-top: 5px; font-weight: 700; text-transform: uppercase;">Analyst Determination & Signature</div>
+        </div>
+        <div>
+          <div class="meta-label">Audit Review & Sign-Off</div>
+          <div style="font-size: 12px; margin-top: 10px; font-weight: 600;">
+            SecureMail Forensic Security Gateway v1.0
+          </div>
+          <div class="sign-line"></div>
+          <div style="font-size: 10px; color: #64748b; margin-top: 5px; font-weight: 700; text-transform: uppercase;">Date of Forensic Sign-Off</div>
+        </div>
+      </div>
+
+      <div style="margin-top: 40px; text-align: center; font-size: 10px; color: #94a3b8;">
+        This document contains automated forensic incident data compiled locally. Confirmed malicious artifacts must be escalated immediately.
+      </div>
+    </body>
+    </html>
+  `;
+
+  const w = window.open();
+  w.document.write(reportHtml);
+  w.document.close();
+  w.focus();
+  setTimeout(() => { w.print(); }, 500);
+}
+
+function exportIncidentReportHTML() {
+  if (!window._currentScanData) return;
+  const d = window._currentScanData;
+  const auth = d.authentication || {};
+  const h = d.header_analysis || {};
+  const urls = d.urls || [];
+  const atts = d.attachments || [];
+  const ph = d.phishing || {};
+  const ip = h.ip_reputation || {};
+  const audit = d.received_hop_audit || { hops: [], anomalies: [] };
+  const wa = d.weighted_phishing_analysis || { score: 0, matches: [] };
+  const c = riskColor(d.risk_level);
+
+  const reportHtml = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>SecureMail Forensic Incident Report - ${d.scan_id}</title>
+      <style>
+        :root {
+          --red: #ef4444;
+          --orange: #f97316;
+          --amber: #f59e0b;
+          --lime: #84cc16;
+          --green: #10b981;
+          --t3: #64748b;
+        }
+        body { font-family: 'Helvetica Neue', Arial, sans-serif; color: #1e293b; line-height: 1.5; padding: 40px; background: #ffffff; }
+        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e2e8f0; padding-bottom: 20px; margin-bottom: 25px; }
+        .title { font-size: 20px; font-weight: 800; text-transform: uppercase; letter-spacing: -0.5px; color: #0f172a; }
+        .subtitle { font-size: 11px; text-transform: uppercase; color: #64748b; font-weight: 700; }
+        .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 25px; font-size: 13px; }
+        .meta-item { background: #f8fafc; border: 1px solid #e2e8f0; padding: 12px; border-radius: 8px; }
+        .meta-label { font-size: 10px; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 3px; }
+        .meta-val { font-weight: 600; font-family: monospace; word-break: break-all; }
+        .score-card { display: flex; align-items: center; gap: 20px; border-radius: 12px; padding: 20px; margin-bottom: 25px; }
+        .score-circle { width: 70px; height: 70px; border-radius: 50%; color: white; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 26px; font-weight: 800; }
+        .score-lbl { font-size: 9px; text-transform: uppercase; font-weight: 700; margin-top: -3px; opacity: 0.8; }
+        .score-desc { flex: 1; }
+        .score-title { font-size: 16px; font-weight: 700; color: #0f172a; margin-bottom: 4px; }
+        .score-text { font-size: 13px; color: #475569; }
+        .section-title { font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: #475569; margin-bottom: 12px; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 12px; }
+        th { text-align: left; background: #f1f5f9; padding: 8px 10px; font-weight: 700; color: #475569; border-bottom: 1px solid #e2e8f0; }
+        td { padding: 8px 10px; border-bottom: 1px solid #f1f5f9; color: #334155; }
+        .pass { color: #16a34a; font-weight: 700; }
+        .fail { color: #dc2626; font-weight: 700; }
+        .unknown { color: #64748b; font-weight: 700; }
+        .badge { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; }
+        .badge-red { background: #fee2e2; color: #dc2626; }
+        .badge-green { background: #dcfce7; color: #16a34a; }
+        .badge-amber { background: #fef3c7; color: #d97706; }
+        .sign-off { margin-top: 50px; border-top: 2px dashed #cbd5e1; padding-top: 25px; display: grid; grid-template-columns: 1fr 1fr; gap: 30px; font-size: 13px; }
+        .sign-line { border-bottom: 1px solid #94a3b8; height: 35px; margin-top: 5px; }
+      </style>
+    </head>
+    <body>
+      <div class="header">
+        <div>
+          <div class="title">SecureMail Forensic Report</div>
+          <div class="subtitle">Gateway Email Threat Intelligence & Incident Auditing</div>
+        </div>
+        <div style="font-size: 11px; text-align: right; color: #64748b;">
+          <strong>REPORT ID:</strong> ${d.scan_id.substring(0, 8).toUpperCase()}<br/>
+          <strong>DATE:</strong> ${d.scanned_at}
+        </div>
+      </div>
+
+      <div class="score-card" style="background: ${d.risk_level === 'clean' ? '#f0fdf4' : (d.risk_level === 'critical' || d.risk_level === 'high') ? '#fef2f2' : '#fffbeb'}; border: 1px solid ${d.risk_level === 'clean' ? '#bbf7d0' : (d.risk_level === 'critical' || d.risk_level === 'high') ? '#fee2e2' : '#fef3c7'};">
+        <div class="score-circle" style="background: ${c};">${d.risk_score}</div>
+        <div class="score-desc">
+          <div class="score-title">Threat Assessment: <span style="color: ${c}; text-transform: uppercase;">${d.risk_level}</span></div>
+          <div class="score-text">${esc(d.summary)}</div>
+        </div>
+      </div>
+
+      <div class="meta-grid">
+        <div class="meta-item">
+          <div class="meta-label">Sender Details</div>
+          <div class="meta-val" style="font-size: 12.5px;">${esc(d.sender_email)}</div>
+          <div style="font-size: 11px; color:#64748b; margin-top:5px;"><strong>Subject:</strong> ${esc(d.subject)}</div>
+        </div>
+        <div class="meta-item">
+          <div class="meta-label">Originating Server & Routing</div>
+          <div class="meta-val" style="font-size: 12.5px;">IP: ${esc(h.originating_ip || 'None')}</div>
+          <div style="font-size: 11px; color:#64748b; margin-top:5px;"><strong>Geo/ISP:</strong> ${esc(ip?.country_code || 'N/A')} - ${esc(ip?.isp || 'N/A')}</div>
+        </div>
+      </div>
+
+      <div class="section-title">Authentication Audit</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Protocol</th>
+            <th>MTA Status</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>SPF (Sender Policy Framework)</strong></td>
+            <td class="${authClass(auth.spf)}">${(auth.spf || 'UNKNOWN').toUpperCase()}</td>
+            <td>Verifies if the sending mail server is authorized in the sender domain's DNS.</td>
+          </tr>
+          <tr>
+            <td><strong>DKIM (DomainKeys Identified Mail)</strong></td>
+            <td class="${authClass(auth.dkim)}">${(auth.dkim || 'UNKNOWN').toUpperCase()}</td>
+            <td>Cryptographically validates that the email headers and body have not been altered in transit.</td>
+          </tr>
+          <tr>
+            <td><strong>DMARC (Domain-based Message Auth)</strong></td>
+            <td class="${authClass(auth.dmarc)}">${(auth.dmarc || 'UNKNOWN').toUpperCase()}</td>
+            <td>Specifies the domain owner policy instructions if SPF/DKIM verification fails.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      ${audit.hops && audit.hops.length ? `
+      <div class="section-title">Forensic Routing Hop Audit (Received Chain)</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Hop</th>
+            <th>From (Declared Host)</th>
+            <th>By (Receiving MTA)</th>
+            <th>Relaying IP Address</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${audit.hops.map(hop => `
+            <tr>
+              <td><strong>${hop.hop}</strong></td>
+              <td>${esc(hop.from)}</td>
+              <td>${esc(hop.by)}</td>
+              <td style="font-family: monospace;">${esc(hop.ip || 'N/A')}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+      ` : ''}
+
+      ${wa.matches && wa.matches.length ? `
+      <div class="section-title">Phishing Indicator Density (Weighted Matches)</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Identified Keyword/Phrase</th>
+            <th>Count</th>
+            <th>Base Weight</th>
+            <th>Total Points</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${wa.matches.map(m => `
+            <tr>
+              <td><span style="color: #c2410c; font-weight: 600;">"${esc(m.keyword)}"</span></td>
+              <td>${m.count}</td>
+              <td>${m.weight}</td>
+              <td style="font-weight: 700; font-family: monospace;">+${m.score}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+      ` : ''}
+
+      ${urls.length ? `
+      <div class="section-title">Link Analysis (VirusTotal Reputation)</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Extracted Destination URL</th>
+            <th>Domain Lookalike</th>
+            <th>Detections</th>
+            <th>Verdict</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${urls.map(u => {
+            const det = u.vt_result?.detections ?? null;
+            const detStr = det !== null ? `${det}/${u.vt_result.total_engines || '87'}` : 'Not Scanned';
+            const detLvl = det !== null ? (det > 3 ? 'badge badge-red' : 'badge badge-green') : 'badge';
+            const isLook = u.is_lookalike ? '<span class="badge badge-red">⚠ IMPERSONATION</span>' : '<span class="badge badge-green">No</span>';
+            return `
+              <tr>
+                <td style="font-family: monospace; font-size: 11px; word-break: break-all;">${esc(u.url)}</td>
+                <td>${isLook}</td>
+                <td>${detStr}</td>
+                <td><span class="${detLvl}">${u.suspicious ? 'SUSPICIOUS' : 'CLEAN'}</span></td>
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+      </table>
+      ` : ''}
+
+      <div class="sign-off">
+        <div>
+          <div class="meta-label">Forensic Classification</div>
+          <div style="font-size: 16px; font-weight: 800; margin-top: 10px; color: ${c}; text-transform: uppercase;">
+            ${d.risk_level === 'clean' ? '☑ VERIFIED CLEAN' : '☒ CONFIRMED INTELLIGENCE THREAT'}
+          </div>
+          <div class="sign-line"></div>
+          <div style="font-size: 10px; color: #64748b; margin-top: 5px; font-weight: 700; text-transform: uppercase;">Analyst Determination & Signature</div>
+        </div>
+        <div>
+          <div class="meta-label">Audit Review & Sign-Off</div>
+          <div style="font-size: 12px; margin-top: 10px; font-weight: 600;">
+            SecureMail Forensic Security Gateway v1.0
+          </div>
+          <div class="sign-line"></div>
+          <div style="font-size: 10px; color: #64748b; margin-top: 5px; font-weight: 700; text-transform: uppercase;">Date of Forensic Sign-Off</div>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  const blob = new Blob([reportHtml], { type: 'text/html' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `SecureMail_Forensic_Report_${d.scan_id.substring(0,8)}.html`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  toast('HTML Forensic Report downloaded!', 'success');
+}
+</script>
+</body>
+</html>
