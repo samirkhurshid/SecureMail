@@ -25,21 +25,32 @@ def compute_email_risk_score(
     score = 0
     threat_types = set()
 
-    # ── Authentication failures (max 30 pts) ─────────────────────
+    # ── Authentication failures (max 35 pts) ─────────────────────
     if auth.get("spf") == "fail":
         score += 12
     elif auth.get("spf") in ("softfail", "neutral"):
         score += 5
+    elif auth.get("spf") == "unknown":
+        score += 6   # No auth header at all is suspicious
+
     if auth.get("dkim") == "fail":
         score += 10
     elif auth.get("dkim") == "none":
         score += 5
+    elif auth.get("dkim") == "unknown":
+        score += 5   # Missing DKIM suspicious
+
     if auth.get("dmarc") == "fail":
         score += 8
+    elif auth.get("dmarc") == "unknown":
+        score += 4   # Missing DMARC suspicious
 
     if all(auth.get(k) == "fail" for k in ("spf", "dkim", "dmarc")):
         score += 10  # Bonus for triple failure
         threat_types.add("spoofing")
+    elif all(auth.get(k) == "unknown" for k in ("spf", "dkim", "dmarc")):
+        score += 8   # Bonus: complete absence of auth headers = likely spoofed
+        threat_types.add("header_anomaly")
 
     # ── IP reputation (max 20 pts) ────────────────────────────────
     if ip_reputation:
@@ -54,23 +65,51 @@ def compute_email_risk_score(
         if ip_reputation.get("is_tor"):
             score += 8
 
-    # ── Phishing indicators (max 25 pts) ─────────────────────────
+    # ── Phishing indicators (max 30 pts) ─────────────────────────
     phishing_score = 0
     if phishing.get("urgency_language"):
         phishing_score += 5
     if phishing.get("credential_request"):
         phishing_score += 10
     if phishing.get("domain_lookalike"):
-        phishing_score += 12
+        phishing_score += 15  # Includes sender domain impersonation
     if phishing.get("display_name_spoof"):
         phishing_score += 8
     if phishing.get("reply_to_mismatch"):
         phishing_score += 5
     if phishing.get("subject_suspicious"):
-        phishing_score += 3
+        phishing_score += 8  # Extortion subjects are high severity
     phishing_score = min(phishing_score, 30)
     score += phishing_score
     if phishing_score >= 10:
+        threat_types.add("phishing")
+
+    # ── Extortion / sextortion / blackmail (max 40 pts) ──────────
+    extortion_score = 0
+    if phishing.get("extortion"):
+        extortion_score += 20
+        threat_types.add("extortion")
+        threat_types.add("social_engineering")
+    if phishing.get("bitcoin_demand"):
+        extortion_score += 15
+        threat_types.add("extortion")
+    if phishing.get("bitcoin_wallet_found"):
+        extortion_score += 10
+    if phishing.get("webcam_threat"):
+        extortion_score += 15
+        threat_types.add("social_engineering")
+    if phishing.get("do_not_contact_instruction"):
+        extortion_score += 8
+    if phishing.get("domain_impersonation"):
+        extortion_score += 15
+        threat_types.add("spoofing")
+    extortion_score = min(extortion_score, 55)  # Extortion = highest severity
+    score += extortion_score
+
+    # ── Weighted keyword bonus (max 15 pts) ───────────────────────
+    kw_score = phishing.get("keyword_score", 0)
+    score += min(20, int(kw_score * 0.20))
+    if kw_score >= 20:
         threat_types.add("phishing")
 
     # ── Malicious URLs (max 20 pts) ───────────────────────────────
@@ -149,6 +188,10 @@ def summarise(score: int, risk_level: str, threat_types: list) -> str:
         return "No threats detected. Email appears legitimate."
 
     parts = []
+    if "extortion" in threat_types:
+        parts.append("extortion / sextortion scam")
+    if "social_engineering" in threat_types and "extortion" not in threat_types:
+        parts.append("social engineering")
     if "phishing" in threat_types:
         parts.append("phishing attempt")
     if "malicious_attachment" in threat_types:

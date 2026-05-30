@@ -63,6 +63,29 @@ PHISHING_WEIGHTS = {
     "free": 3, "winner": 4, "prize": 4, "lottery": 8, "claim": 4,
     "inheritance": 8, "wire transfer": 8, "advance fee": 8, "investment": 4,
     "billion": 3, "million": 3, "transfer funds": 6,
+
+    # High Severity (Account Takeover / Suspension Phishing)
+    "account suspended": 9, "account suspension": 9, "permanent suspension": 9,
+    "permanently limited": 8, "access restricted": 7, "access restrictions": 7,
+    "unusual login": 8, "unusual activity": 7, "new device": 6,
+    "verify your identity": 9, "verify identity": 9, "confirm identity": 8,
+    "restore full access": 8, "restore access": 7, "temporarily limited": 8,
+    "security check": 6, "secure link": 7, "click the link": 6,
+    "loss of transaction": 9, "transaction history": 7,
+    "security operations": 6, "account services": 5,
+    "unauthorized access": 8, "suspicious activity": 7,
+
+    # High Severity (Extortion / Sextortion / Blackmail)
+    "bitcoin": 10, "btc": 10, "cryptocurrency": 9, "crypto wallet": 10,
+    "wallet address": 10, "send payment": 9, "must send": 9, "transfer bitcoin": 10,
+    "i have video": 10, "i have footage": 10, "i have access": 9,
+    "recorded you": 10, "webcam": 9, "spyware": 10, "monitoring your": 8,
+    "send these recordings": 10, "send this video": 10, "will send": 7,
+    "do not contact": 9, "do not reply": 7, "i am watching": 10,
+    "delete everything": 7, "payment confirmed": 8, "after payment": 8,
+    "48 hours": 5, "72 hours": 5, "within hours": 6,
+    "adult website": 9, "explicit content": 9, "your contacts": 6,
+    "family members": 6, "social media accounts": 5,
 }
 
 # Common URL shorteners to flag
@@ -75,19 +98,83 @@ URL_SHORTENERS = {
 URGENCY_PATTERNS = re.compile(
     r"\b(urgent|immediately|account.suspended|verify.now|click.here|limited.time|"
     r"action.required|your.account|suspended|blocked|unusual.activity|"
-    r"confirm.your|update.your|validate|expires|24.hours|48.hours)\b",
+    r"confirm.your|update.your|validate|expires|24.hours|48.hours|72.hours|"
+    r"within.hours|do.not.ignore|last.warning|final.notice|time.is.running)\b",
     re.IGNORECASE,
 )
 
 CREDENTIAL_PATTERNS = re.compile(
     r"\b(password|username|login|sign.in|credentials|social.security|"
-    r"credit.card|bank.account|ssn|date.of.birth|pin.number)\b",
+    r"credit.card|bank.account|ssn|date.of.birth|pin.number|"
+    r"verify.your.identity|verify.identity|confirm.identity|"
+    r"restore.access|restore.full.access|limited.access|"
+    r"verify.your.account|confirm.your.account|"
+    r"click.the.link|click.here.to.verify|secure.link|"
+    r"re-verify|re-confirm|reactivate|unlock.account)\b",
     re.IGNORECASE,
 )
 
+# Extortion / sextortion / blackmail patterns
+EXTORTION_PATTERNS = re.compile(
+    r"\b(bitcoin|btc|cryptocurrency|crypto.wallet|wallet.address|"
+    r"send.payment|must.send|transfer.bitcoin|"
+    r"i.have.video|i.have.footage|i.have.access|recorded.you|"
+    r"webcam|spyware|monitoring.your|"
+    r"send.these.recordings|send.this.video|will.send|"
+    r"do.not.contact.auth|do.not.reply|i.am.watching|"
+    r"delete.everything|payment.confirmed|after.payment|"
+    r"adult.website|explicit.content|your.contacts|"
+    r"family.members|send.*recording|blackmail|extort)\b",
+    re.IGNORECASE,
+)
+
+# Bitcoin wallet address pattern
+BITCOIN_WALLET_PATTERN = re.compile(
+    r"\b(1[A-Za-z0-9]{25,34}|3[A-Za-z0-9]{25,34}|bc1[a-z0-9]{39,59})\b"
+)
+
+# Domain impersonation: brand name in domain but NOT the official domain
+BRAND_IMPERSONATION = {
+    "protonmail": "protonmail.com",
+    "paypal": "paypal.com",
+    "paypai": "paypal.com",   # capital-I spoof
+    "paypa1": "paypal.com",   # digit-1 spoof
+    "apple": "apple.com",
+    "google": "google.com",
+    "microsoft": "microsoft.com",
+    "amazon": "amazon.com",
+    "netflix": "netflix.com",
+    "facebook": "facebook.com",
+    "instagram": "instagram.com",
+    "twitter": "twitter.com",
+    "linkedin": "linkedin.com",
+    "dropbox": "dropbox.com",
+    "yahoo": "yahoo.com",
+    "gmail": "gmail.com",
+    "outlook": "outlook.com",
+    "chase": "chase.com",
+    "wellsfargo": "wellsfargo.com",
+    "bankofamerica": "bankofamerica.com",
+    "citibank": "citibank.com",
+    "hsbc": "hsbc.com",
+}
+
 SUSPICIOUS_SUBJECT_PATTERNS = re.compile(
     r"\b(free|winner|prize|lottery|claim|inheritance|nigerian|transfer|"
-    r"billion|million|investment|wire.transfer|advance.fee)\b",
+    r"billion|million|investment|wire.transfer|advance.fee|"
+    r"i know what you|last week|last night|last month|"
+    r"your account has been|your device|i have your|"
+    r"you visited|you were recorded|your webcam|"
+    r"payment required|bitcoin|final warning|last warning|"
+    r"do not ignore|i have footage|i have video|"
+    r"security alert|urgent notice|action required|"
+    r"urgent|account.will.be|will.be.suspended|suspended.within|"
+    r"verify.your|verify.immediately|restore.access|limited.access|"
+    r"account.limited|temporarily.limited|unusual.activity|"
+    r"unusual.login|new.device|unauthorized.access|"
+    r"account.suspended|suspension.notice|account.locked|"
+    r"confirm.your.identity|verify.your.identity|"
+    r"24.hours|48.hours|within.24|within.48)\b",
     re.IGNORECASE,
 )
 
@@ -99,9 +186,14 @@ URL_REGEX = re.compile(
 
 # Common lookalike domain patterns
 BRAND_LOOKALIKE = re.compile(
-    r"(paypa1|paypai|payp4l|g00gle|g0ogle|amaz0n|amazonn|micros0ft|"
-    r"app1e|appl3|faceb00k|faceb0ok|netfl1x|netf1ix|ins1agram|"
-    r"tw1tter|linked1n|dropb0x|g-mail|gmai1)",
+    r"(paypa1|paypai|payp4l|paypaI|pay-pal|pay_pal|"
+    r"g00gle|g0ogle|gooogle|g-mail|gmai1|"
+    r"amaz0n|amazonn|amaz-on|"
+    r"micros0ft|microsoFt|micr0soft|"
+    r"app1e|appl3|appIe|"
+    r"faceb00k|faceb0ok|face-book|"
+    r"netfl1x|netf1ix|netfIix|"
+    r"ins1agram|tw1tter|linked1n|dropb0x)",
     re.IGNORECASE,
 )
 
@@ -262,14 +354,15 @@ def _extract_urls(content: str) -> List[Dict]:
         is_lookalike, spoofed_brand = _check_domain_lookalike(domain)
 
         results.append({
-            "url": url,
-            "domain": domain,
-            "scheme": parsed.scheme,
-            "is_shortened": is_shortened,
-            "is_lookalike": is_lookalike,
-            "spoofed_brand": spoofed_brand,
-            "suspicious": is_shortened or is_lookalike,
-        })
+                "url": url,
+                "domain": domain,
+                "registrable_domain": ".".join(domain.split(".")[-2:]) if len(domain.split(".")) >= 2 else domain,
+                "scheme": parsed.scheme,
+                "is_shortened": is_shortened,
+                "is_lookalike": is_lookalike,
+                "subdomain_spoof": any(b in domain and b not in ".".join(domain.split(".")[-2:]) for b in ["paypal","apple","google","microsoft","amazon","netflix","facebook","instagram"]),
+                "suspicious": is_shortened or is_lookalike or any(b in domain and b not in ".".join(domain.split(".")[-2:]) for b in ["paypal","apple","google","microsoft","amazon"]),
+            })
 
     return results[:50]  # Cap at 50 URLs
 
@@ -309,11 +402,12 @@ def _extract_attachment_metadata(msg) -> List[Dict]:
 
 
 def _analyse_phishing(headers: dict, body_text: str, body_html: str, urls: List) -> dict:
-    """Heuristic phishing indicator analysis."""
+    """Heuristic phishing indicator analysis — covers phishing, extortion, sextortion, BEC."""
     content = body_text + " " + body_html
     indicators = []
     techniques = []
 
+    # ── Standard phishing signals ─────────────────────────────
     urgency = bool(URGENCY_PATTERNS.search(content))
     if urgency:
         indicators.append("urgency language detected")
@@ -323,10 +417,24 @@ def _analyse_phishing(headers: dict, body_text: str, body_html: str, urls: List)
         indicators.append("credential/sensitive data request")
         techniques.append("T1566.002 (Spearphishing Link)")
 
-    domain_lookalike = any(u["is_lookalike"] for u in urls)
+    domain_lookalike = any(u.get("is_lookalike") or u.get("subdomain_spoof") for u in urls)
+
+    # Also check if SENDER domain is a lookalike (even with no URLs in body)
+    from_domain = headers.get("from_domain", "").lower()
+    sender_lookalike = False
+    for brand, official in BRAND_IMPERSONATION.items():
+        if brand in from_domain and official != from_domain and from_domain != "":
+            sender_lookalike = True
+            domain_lookalike = True
+            break
+
     if domain_lookalike:
-        indicators.append("brand lookalike domain in links")
-        techniques.append("T1566.001 (Spearphishing Attachment)")
+        if sender_lookalike:
+            indicators.append(f"sender domain is a brand lookalike ({from_domain})")
+        else:
+            indicators.append("brand lookalike domain in links")
+        techniques.append("T1566.001 (Spearphishing — Lookalike Domain)")
+        techniques.append("T1036 (Masquerading)")
 
     display_name_spoof = headers.get("display_name_spoof", False)
     if display_name_spoof:
@@ -345,6 +453,59 @@ def _analyse_phishing(headers: dict, body_text: str, body_html: str, urls: List)
     if shortened_urls:
         indicators.append("URL shortener used to hide destination")
 
+    # ── Extortion / sextortion / blackmail signals ────────────
+    extortion = bool(EXTORTION_PATTERNS.search(content))
+    if extortion:
+        indicators.append("extortion or blackmail content detected")
+        techniques.append("T1657 (Financial Theft — Extortion)")
+        techniques.append("T1566 (Phishing — Social Engineering)")
+
+    bitcoin_demand = bool(re.search(
+        r"\b(bitcoin|btc|cryptocurrency|send.*wallet|wallet.*address|crypto)\b",
+        content, re.IGNORECASE
+    ))
+    if bitcoin_demand:
+        indicators.append("cryptocurrency/Bitcoin payment demand")
+        techniques.append("T1657 (Financial Theft)")
+
+    bitcoin_wallet = bool(BITCOIN_WALLET_PATTERN.search(content))
+    if bitcoin_wallet:
+        indicators.append("Bitcoin wallet address found in body")
+
+    webcam_threat = bool(re.search(
+        r"\b(webcam|recording|footage|spyware|monitoring|screen.record|activat.*(cam|webcam))\b",
+        content, re.IGNORECASE
+    ))
+    if webcam_threat:
+        indicators.append("webcam/spyware threat claim")
+        techniques.append("T1566 (Phishing — Intimidation)")
+
+    do_not_contact = bool(re.search(
+        r"do not contact (auth|police|law)|do not reply|i am watching",
+        content, re.IGNORECASE
+    ))
+    if do_not_contact:
+        indicators.append("instruction to not contact authorities")
+
+    # ── Sender domain impersonation ───────────────────────────
+    from_domain = headers.get("from_domain", "").lower()
+    domain_impersonation = False
+    impersonated_brand = None
+    for brand, official in BRAND_IMPERSONATION.items():
+        if brand in from_domain and official != from_domain:
+            domain_impersonation = True
+            impersonated_brand = brand
+            indicators.append(f"sender domain impersonates {brand} ({official})")
+            techniques.append("T1036 (Masquerading — Domain Spoof)")
+            break
+
+    # ── Weighted keyword score ────────────────────────────────
+    keyword_hits = {}
+    content_lower = content.lower()
+    for kw, weight in PHISHING_WEIGHTS.items():
+        if kw.lower() in content_lower:
+            keyword_hits[kw] = weight
+
     return {
         "urgency_language": urgency,
         "credential_request": credential_request,
@@ -353,8 +514,18 @@ def _analyse_phishing(headers: dict, body_text: str, body_html: str, urls: List)
         "reply_to_mismatch": reply_mismatch,
         "subject_suspicious": subject_suspicious,
         "shortened_urls": shortened_urls,
+        # New extortion fields
+        "extortion": extortion,
+        "bitcoin_demand": bitcoin_demand,
+        "bitcoin_wallet_found": bitcoin_wallet,
+        "webcam_threat": webcam_threat,
+        "do_not_contact_instruction": do_not_contact,
+        "domain_impersonation": domain_impersonation,
+        "impersonated_brand": impersonated_brand,
         "suspicious_patterns": indicators,
         "mitre_techniques": list(set(techniques)),
+        "keyword_hits": keyword_hits,
+        "keyword_score": sum(keyword_hits.values()),
     }
 
 

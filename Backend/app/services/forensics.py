@@ -1,123 +1,140 @@
+"""
+Forensics service — save, retrieve, delete, and export scan logs.
+"""
+
 import os
 import json
+import uuid
 import time
-from typing import List, Dict, Optional
-from app.config import get_settings
-from app.utils.logger import setup_logger
+from typing import Dict, List, Optional
 
-logger = setup_logger(__name__)
-settings = get_settings()
+_CACHE: Optional[List[Dict]] = None
+_CACHE_TIME: float = 0
+_CACHE_TTL: float = 5.0  # seconds
 
-# ── Simple in-memory cache for forensic logs ──────────────────────────────
-_cache: dict = {"logs": None, "ts": 0.0}
-_CACHE_TTL = 30  # seconds: refresh from disk at most every 30s
+
+def get_log_dir() -> str:
+    log_dir = os.path.join(os.path.dirname(__file__), "../../../forensics_logs")
+    os.makedirs(log_dir, exist_ok=True)
+    return os.path.abspath(log_dir)
 
 
 def _invalidate_cache() -> None:
-    _cache["logs"] = None
-    _cache["ts"] = 0.0
+    global _CACHE
+    _CACHE = None
 
-def get_log_dir() -> str:
-    log_dir = settings.FORENSICS_LOG_DIR
-    os.makedirs(log_dir, exist_ok=True)
-    return log_dir
 
 def save_forensic_log(result: dict) -> str:
-    log_id = result.get("scan_id")
-    if not log_id:
-        import uuid
-        log_id = str(uuid.uuid4())
-        result["scan_id"] = log_id
-    
+    """Persist a scan result as a JSON log file. Returns the log_id."""
+    log_id = result.get("scan_id") or str(uuid.uuid4())
     log_dir = get_log_dir()
-    
-    # Clean up old logs if count exceeds FORENSICS_MAX_LOGS
-    try:
-        files = [os.path.join(log_dir, f) for f in os.listdir(log_dir) if f.endswith('.json')]
-        if len(files) >= settings.FORENSICS_MAX_LOGS:
-            # Delete oldest
-            files.sort(key=os.path.getmtime)
-            for f in files[:len(files) - settings.FORENSICS_MAX_LOGS + 1]:
-                os.remove(f)
-    except Exception as e:
-        logger.error(f"Error cleaning old logs: {e}")
-        
-    filepath = os.path.join(log_dir, f"{log_id}.json")
-    try:
-        with open(filepath, "w", encoding="utf-8") as f:
-            json.dump(result, f, indent=2, ensure_ascii=False)
-        logger.info(f"Saved forensic log: {filepath}")
-        _invalidate_cache()  # Bust cache so next read picks up the new log
-    except Exception as e:
-        logger.error(f"Failed to save forensic log {log_id}: {e}")
-        
+    path = os.path.join(log_dir, f"{log_id}.json")
+
+    # Normalise sender field — always store as sender_email
+    if "sender" in result and "sender_email" not in result:
+        result["sender_email"] = result["sender"]
+
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(result, f, indent=2, default=str)
+
+    _invalidate_cache()
     return log_id
 
+
 def get_all_logs() -> List[Dict]:
-    """Return all forensic logs, using an in-memory cache with TTL to avoid
-    reading every file from disk on every request."""
+    """Return all logs sorted newest-first with caching."""
+    global _CACHE, _CACHE_TIME
     now = time.time()
-    if _cache["logs"] is not None and (now - _cache["ts"]) < _CACHE_TTL:
-        return _cache["logs"]
+    if _CACHE is not None and (now - _CACHE_TIME) < _CACHE_TTL:
+        return _CACHE
 
     log_dir = get_log_dir()
     logs = []
-    if not os.path.exists(log_dir):
-        return logs
-    for filename in os.listdir(log_dir):
-        if filename.endswith(".json"):
-            filepath = os.path.join(log_dir, filename)
-            try:
-                with open(filepath, "r", encoding="utf-8") as f:
-                    logs.append(json.load(f))
-            except Exception as e:
-                logger.error(f"Failed to read log {filename}: {e}")
-    # Sort by scanned_at descending
-    logs.sort(key=lambda x: x.get("scanned_at", ""), reverse=True)
+    for fname in os.listdir(log_dir):
+        if not fname.endswith(".json"):
+            continue
+        fpath = os.path.join(log_dir, fname)
+        try:
+            with open(fpath, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                # Normalise: ensure log_id and sender_email always present
+                if "log_id" not in data:
+                    data["log_id"] = data.get("scan_id", fname.replace(".json", ""))
+                if "sender_email" not in data:
+                    data["sender_email"] = data.get("sender", "")
+                logs.append(data)
+        except (json.JSONDecodeError, OSError):
+            continue
 
-    _cache["logs"] = logs
-    _cache["ts"] = now
+    logs.sort(key=lambda x: x.get("scanned_at", ""), reverse=True)
+    _CACHE = logs
+    _CACHE_TIME = now
     return logs
 
+
 def get_log_by_id(log_id: str) -> Optional[Dict]:
-    filepath = os.path.join(get_log_dir(), f"{log_id}.json")
-    if not os.path.exists(filepath):
+    log_dir = get_log_dir()
+    path = os.path.join(log_dir, f"{log_id}.json")
+    if not os.path.exists(path):
         return None
-    try:
-        with open(filepath, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception as e:
-        logger.error(f"Failed to read log {log_id}: {e}")
-        return None
+    with open(path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+        if "log_id" not in data:
+            data["log_id"] = log_id
+        if "sender_email" not in data:
+            data["sender_email"] = data.get("sender", "")
+        return data
+
 
 def delete_log_by_id(log_id: str) -> bool:
-    filepath = os.path.join(get_log_dir(), f"{log_id}.json")
-    if os.path.exists(filepath):
-        try:
-            os.remove(filepath)
-            _invalidate_cache()  # Bust cache so deleted log disappears immediately
-            return True
-        except Exception as e:
-            logger.error(f"Failed to delete log {log_id}: {e}")
-            return False
-    return False
+    log_dir = get_log_dir()
+    path = os.path.join(log_dir, f"{log_id}.json")
+    if not os.path.exists(path):
+        return False
+    os.remove(path)
+    _invalidate_cache()
+    return True
+
 
 def get_stats() -> Dict:
+    """
+    Return aggregate statistics.
+    Includes by_risk_level breakdown AND total_attachments + total_urls
+    so the dashboard stat cards always have real data.
+    """
     logs = get_all_logs()
     total = len(logs)
-    stats = {
-        "total": total,
-        "critical": 0,
-        "high": 0,
-        "medium": 0,
-        "low": 0,
-        "clean": 0,
-        "threat_types": {}
+
+    by_risk: Dict[str, int] = {
+        "critical": 0, "high": 0, "medium": 0, "low": 0, "clean": 0, "unknown": 0
     }
+    threat_types: Dict[str, int] = {}
+    total_attachments = 0
+    total_urls = 0
+    total_score = 0
+
     for log in logs:
         level = log.get("risk_level", "unknown").lower()
-        if level in stats:
-            stats[level] += 1
+        by_risk[level] = by_risk.get(level, 0) + 1
+
         for threat in log.get("threat_types", []):
-            stats["threat_types"][threat] = stats["threat_types"].get(threat, 0) + 1
-    return stats
+            threat_types[threat] = threat_types.get(threat, 0) + 1
+
+        total_attachments += len(log.get("attachments", []))
+        total_urls += len(log.get("urls", []))
+        total_score += log.get("risk_score", 0)
+
+    return {
+        "total": total,
+        "by_risk_level": by_risk,
+        # Legacy flat fields kept for backward compat
+        "critical": by_risk["critical"],
+        "high": by_risk["high"],
+        "medium": by_risk["medium"],
+        "low": by_risk["low"],
+        "clean": by_risk["clean"],
+        "avg_risk_score": round(total_score / total, 1) if total else 0,
+        "total_attachments": total_attachments,
+        "total_urls": total_urls,
+        "threat_types": threat_types,
+    }

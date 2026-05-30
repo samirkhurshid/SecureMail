@@ -89,3 +89,16 @@ async def delete_log(log_id: str):
     if not success:
         raise HTTPException(status_code=404, detail="Log not found")
     return {"status": "success", "message": f"Log {log_id} deleted"}
+
+
+@router.post("/save")
+async def save_log(result: dict):
+    """
+    Manually save a scan result as a forensic log.
+    Called by the browser extension popup Save button.
+    """
+    if not result:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail="No scan result provided")
+    log_id = forensics_service.save_forensic_log(result)
+    return {"status": "saved", "log_id": log_id}

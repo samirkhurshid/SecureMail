@@ -903,55 +903,151 @@
       background: rgba(239, 68, 68, 0.1) !important;
       border-color: rgba(239, 68, 68, 0.35) !important;
     }
+    /* ── Floating Scan Email — glass pill ── */
     .floating-scan-btn {
-      position: absolute;
-      bottom: 24px;
-      right: 24px;
-      z-index: 99;
+      position: fixed;
+      bottom: 30px;
+      right: 26px;
+      z-index: 9999;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0;
+      /* collapsed: perfect circle */
+      width: 46px;
+      height: 46px;
+      padding: 0 14px;
+      border-radius: 100px;
+      overflow: hidden;
+      white-space: nowrap;
+      text-decoration: none;
+      cursor: pointer;
+
+      /* ── deep glass ── */
+      background: rgba(12, 14, 20, 0.22) !important;
+      backdrop-filter: blur(28px) saturate(220%) brightness(1.08) contrast(1.05) !important;
+      -webkit-backdrop-filter: blur(28px) saturate(220%) brightness(1.08) contrast(1.05) !important;
+
+      /* layered border: top highlight + colour tint */
+      border: 1px solid rgba(255, 255, 255, 0.16) !important;
+      border-bottom-color: rgba(255, 255, 255, 0.06) !important;
+
+      /* layered shadow: ambient + colour glow + inner shine */
+      box-shadow:
+        0 2px 4px  rgba(0, 0, 0, 0.40),
+        0 8px 24px rgba(0, 0, 0, 0.32),
+        0 0  0 1px rgba(255, 255, 255, 0.04),
+        inset 0 1.5px 0 rgba(255, 255, 255, 0.14),
+        inset 0 -1px 0  rgba(0,   0,   0,   0.18);
+
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.015em;
+
+      transition:
+        width     0.38s cubic-bezier(0.34, 1.48, 0.64, 1),
+        padding   0.38s cubic-bezier(0.34, 1.48, 0.64, 1),
+        gap       0.28s ease,
+        box-shadow 0.22s ease,
+        background 0.22s ease,
+        border-color 0.22s ease;
+    }
+
+    /* gradient icon wrapper */
+    .fsb-icon {
       display: flex;
       align-items: center;
-      gap: 8px;
-      padding: 12px 24px;
-      border-radius: 30px;
-      background: rgba(17, 19, 24, 0.25) !important;
-      backdrop-filter: blur(24px) saturate(180%) !important;
-      -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
-      border: 1px solid rgba(255, 255, 255, 0.08) !important;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05);
-      color: #60a5fa !important;
-      font-size: 13.5px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      text-decoration: none;
+      justify-content: center;
+      flex-shrink: 0;
+      width: 18px;
+      height: 18px;
+      position: relative;
     }
+    /* gradient via SVG filter trick — use a wrapping span with gradient fill */
+    .fsb-icon svg {
+      width: 17px;
+      height: 17px;
+      stroke-width: 2.4;
+      stroke: url(#fsb-grad);
+      transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
+                  filter 0.2s ease;
+      filter: drop-shadow(0 0 5px rgba(139, 92, 246, 0.45));
+      overflow: visible;
+    }
+    .floating-scan-btn:hover .fsb-icon svg {
+      transform: scale(1.18) rotate(-8deg);
+      filter: drop-shadow(0 0 8px rgba(236, 72, 153, 0.6));
+    }
+
+    /* label hidden until hover */
+    .fsb-label {
+      overflow: hidden;
+      max-width: 0;
+      opacity: 0;
+      background: linear-gradient(135deg, #60a5fa, #a78bfa, #f472b6);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      transition:
+        max-width 0.32s cubic-bezier(0.34, 1.2, 0.64, 1),
+        opacity   0.22s ease 0.06s;
+      pointer-events: none;
+    }
+
+    /* hover: expand */
     .floating-scan-btn:hover {
-      background: rgba(17, 19, 24, 0.4) !important;
-      border-color: rgba(96, 165, 250, 0.35) !important;
-      box-shadow: 0 12px 35px rgba(96, 165, 250, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.1);
-      transform: translateY(-2px) scale(1.02);
+      width: 138px;
+      padding: 0 16px 0 13px;
+      gap: 9px;
+      background: rgba(12, 14, 20, 0.38) !important;
+      border-color: rgba(139, 92, 246, 0.38) !important;
+      border-bottom-color: rgba(96, 165, 250, 0.18) !important;
+      box-shadow:
+        0 2px 4px  rgba(0, 0, 0, 0.35),
+        0 10px 32px rgba(0, 0, 0, 0.28),
+        0 0  18px rgba(139, 92, 246, 0.14),
+        inset 0 1.5px 0 rgba(255, 255, 255, 0.18),
+        inset 0 -1px 0  rgba(0,   0,   0,   0.14);
     }
-    .floating-scan-btn svg {
-      width: 16px;
-      height: 16px;
-      stroke-width: 2.5;
+    .floating-scan-btn:hover .fsb-label {
+      max-width: 100px;
+      opacity: 1;
     }
+
+    /* press */
+    .floating-scan-btn:active {
+      transform: scale(0.93);
+      transition: transform 0.1s ease;
+    }
+
+    /* ── light theme ── */
     body.light-theme .floating-scan-btn {
-      background: rgba(222, 233, 252, 0.48) !important;
-      border: 1.5px solid rgba(59, 130, 246, 0.35) !important;
-      box-shadow: 0 10px 30px rgba(59, 130, 246, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.75) !important;
-      color: #2563eb !important;
-      backdrop-filter: blur(20px) saturate(250%) !important;
-      -webkit-backdrop-filter: blur(20px) saturate(250%) !important;
-      transform: translate3d(0, 0, 0);
-      will-change: backdrop-filter;
+      background: rgba(248, 250, 255, 0.38) !important;
+      border: 1px solid rgba(148, 163, 250, 0.30) !important;
+      border-bottom-color: rgba(148, 163, 250, 0.14) !important;
+      backdrop-filter: blur(28px) saturate(300%) brightness(1.06) !important;
+      -webkit-backdrop-filter: blur(28px) saturate(300%) brightness(1.06) !important;
+      box-shadow:
+        0 2px 4px  rgba(59, 130, 246, 0.10),
+        0 8px 24px rgba(59, 130, 246, 0.12),
+        inset 0 1.5px 0 rgba(255, 255, 255, 0.90),
+        inset 0 -1px 0  rgba(59, 130, 246, 0.06) !important;
     }
     body.light-theme .floating-scan-btn:hover {
-      background: rgba(222, 233, 252, 0.68) !important;
-      border-color: rgba(59, 130, 246, 0.55) !important;
-      box-shadow: 0 12px 35px rgba(59, 130, 246, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.85) !important;
-      color: #1d4ed8 !important;
-      transform: translate3d(0, -2px, 0) scale(1.02);
+      background: rgba(248, 250, 255, 0.60) !important;
+      border-color: rgba(139, 92, 246, 0.38) !important;
+      box-shadow:
+        0 2px 4px  rgba(59, 130, 246, 0.12),
+        0 10px 32px rgba(59, 130, 246, 0.18),
+        0 0  18px rgba(139, 92, 246, 0.10),
+        inset 0 1.5px 0 rgba(255, 255, 255, 0.95),
+        inset 0 -1px 0  rgba(59, 130, 246, 0.06) !important;
+    }
+    body.light-theme .fsb-label {
+      background: linear-gradient(135deg, #2563eb, #7c3aed, #db2777);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
     }
     body.light-theme .live-threats-btn {
       background: rgba(239, 68, 68, 0.04) !important;
@@ -1519,10 +1615,26 @@ Authentication-Results: spf=fail; dkim=fail; dmarc=fail" style="width:100%;min-h
 
   </div><!-- /content -->
 
-  <!-- Floating Scan Email Button -->
-  <a class="floating-scan-btn" href="#" onclick="nav('scan');return false;" role="button">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-    Scan Email
+  <!-- Floating Scan Email Button — glass pill with gradient icon -->
+  <!-- SVG gradient definition (hidden, referenced by stroke:url) -->
+  <svg width="0" height="0" style="position:absolute;overflow:hidden">
+    <defs>
+      <linearGradient id="fsb-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%"   stop-color="#60a5fa"/>
+        <stop offset="48%"  stop-color="#a78bfa"/>
+        <stop offset="100%" stop-color="#f472b6"/>
+      </linearGradient>
+    </defs>
+  </svg>
+
+  <a class="floating-scan-btn" href="#" onclick="nav('scan');return false;" role="button" aria-label="Scan Email">
+    <span class="fsb-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="11" cy="11" r="8"/>
+        <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      </svg>
+    </span>
+    <span class="fsb-label">Scan Email</span>
   </a>
 </div><!-- /main -->
 </div><!-- /app -->

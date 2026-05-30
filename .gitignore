@@ -29,6 +29,8 @@ htmlcov/
 
 # ── Forensics logs (may contain sensitive email data) ─────────────
 Backend/forensics_logs/
+forensics_logs/
+
 
 # ── IDE ───────────────────────────────────────────────────────────
 .idea/
