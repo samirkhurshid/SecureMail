@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import time
 
-from app.routers import scan, forensics, headers, attachments, settings as settings_router
+from app.routers import scan, forensics, headers, attachments, settings as settings_router, ai as ai_router
 from app.utils.logger import setup_logger
 from app.config import get_settings
 
@@ -20,7 +20,7 @@ settings = get_settings()
 app = FastAPI(
     title="Email Security Gateway API",
     description="Real-time email threat detection and forensic analysis",
-    version="1.0.0",
+    version="1.2.0",
     docs_url="/docs",
     redoc_url="/redoc",
 )
@@ -56,11 +56,12 @@ app.include_router(forensics.router, prefix="/api/forensics", tags=["Forensics"]
 app.include_router(headers.router, prefix="/api/headers", tags=["Header Analysis"])
 app.include_router(attachments.router, prefix="/api/attachments", tags=["Attachments"])
 app.include_router(settings_router.router, prefix="/api/settings", tags=["Settings"])
+app.include_router(ai_router.router, prefix="/api/ai", tags=["AI Analysis"])
 
 
 @app.get("/", tags=["Health"])
 async def root():
-    return {"status": "online", "service": "Email Security Gateway", "version": "1.0.0"}
+    return {"status": "online", "service": "Email Security Gateway", "version": "1.2.0"}
 
 
 @app.get("/health", tags=["Health"])

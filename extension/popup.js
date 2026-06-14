@@ -449,19 +449,11 @@ async function saveSettings() {
   const vt      = document.getElementById('cfg-vt').value.trim();
   const abuse   = document.getElementById('cfg-abuse').value.trim();
 
+  // Save backend URL locally so the popup remembers it across sessions.
+  // Note: API keys (VT / AbuseIPDB) are configured server-side in .env only
+  // — there is no key-upload endpoint on the backend by design.
   await chrome.storage.local.set({ backend, vt, abuse });
   API_BASE = backend + '/api';
-
-  if (vt || abuse) {
-    try {
-      await fetch(`${API_BASE}/settings/keys`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ virustotal_api_key: vt, abuseipdb_api_key: abuse }),
-        signal: AbortSignal.timeout(5000),
-      });
-    } catch { /* keys still saved locally */ }
-  }
 
   const ok = await checkBackend();
   showErr('settings-err', ok ? '' : 'Saved — but backend not reachable at this URL');
@@ -758,13 +750,17 @@ async function saveToDashboard() {
   const stored = await chrome.storage.session.get('lastResult');
   if (!stored.lastResult) return;
   try {
-    await fetch(`${API_BASE}/forensics`, {
+    const r = await fetch(`${API_BASE}/forensics/save`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(stored.lastResult),
       signal: AbortSignal.timeout(5000),
     });
-  } catch { /* log already auto-saved by backend for non-clean results */ }
+    if (!r.ok) console.warn('SecureMail: save log failed', r.status);
+  } catch (e) {
+    // Backend auto-saves non-clean results — manual save is a fallback
+    console.warn('SecureMail: saveToDashboard error', e);
+  }
 }
 
 // ── Theme management ──

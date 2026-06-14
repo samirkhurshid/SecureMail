@@ -52,22 +52,22 @@ PHISHING_WEIGHTS = {
     "social security": 10, "credit card": 10, "bank account": 10, "ssn": 10,
     "pin number": 10, "verify your account": 8, "confirm your": 6, "validate": 6,
     "security question": 8,
-    
+
     # Medium Severity (Urgency & Threat)
     "urgent": 6, "immediately": 6, "account suspended": 9, "verify now": 8,
     "click here": 5, "limited time": 4, "action required": 6, "blocked": 7,
     "unusual activity": 7, "expires": 5, "24 hours": 5, "48 hours": 5,
     "unauthorized": 6, "suspended": 7, "restricted": 7,
-    
+
     # Low/Medium Severity (Offers & Fraud Scams)
     "free": 3, "winner": 4, "prize": 4, "lottery": 8, "claim": 4,
     "inheritance": 8, "wire transfer": 8, "advance fee": 8, "investment": 4,
     "billion": 3, "million": 3, "transfer funds": 6,
 
     # High Severity (Account Takeover / Suspension Phishing)
-    "account suspended": 9, "account suspension": 9, "permanent suspension": 9,
+    "account suspension": 9, "permanent suspension": 9,
     "permanently limited": 8, "access restricted": 7, "access restrictions": 7,
-    "unusual login": 8, "unusual activity": 7, "new device": 6,
+    "unusual login": 8, "new device": 6,
     "verify your identity": 9, "verify identity": 9, "confirm identity": 8,
     "restore full access": 8, "restore access": 7, "temporarily limited": 8,
     "security check": 6, "secure link": 7, "click the link": 6,
@@ -83,10 +83,11 @@ PHISHING_WEIGHTS = {
     "send these recordings": 10, "send this video": 10, "will send": 7,
     "do not contact": 9, "do not reply": 7, "i am watching": 10,
     "delete everything": 7, "payment confirmed": 8, "after payment": 8,
-    "48 hours": 5, "72 hours": 5, "within hours": 6,
+    "72 hours": 5, "within hours": 6,
     "adult website": 9, "explicit content": 9, "your contacts": 6,
     "family members": 6, "social media accounts": 5,
 }
+
 
 # Common URL shorteners to flag
 URL_SHORTENERS = {

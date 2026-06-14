@@ -11,9 +11,10 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # ── API Keys ───────────────────────────────────────────────────
+    # ── API Keys — stored in .env ONLY, never exposed to frontend ──
     VIRUSTOTAL_API_KEY: str = Field(default="")
     ABUSEIPDB_API_KEY: str = Field(default="")
+    ANTHROPIC_API_KEY: str = Field(default="")   # For AI threat explainer
 
     # ── App Configuration ──────────────────────────────────────────
     APP_ENV: str = Field(default="development")
@@ -40,11 +41,18 @@ class Settings(BaseSettings):
 
     @property
     def cors_origins(self) -> list[str]:
-        """Parse CORS_ALLOWED_ORIGINS into a list. Use '*' for all or comma-separated URLs."""
         raw = self.CORS_ALLOWED_ORIGINS.strip()
         if raw == "*":
             return ["*"]
         return [o.strip() for o in raw.split(",") if o.strip()]
+
+    def mask_key(self, key: str) -> str:
+        """Return a masked version — NEVER expose full key through any API endpoint."""
+        if not key:
+            return None
+        if len(key) < 8:
+            return "•" * len(key)
+        return f"{key[:4]}{'•' * (len(key) - 8)}{key[-4:]}"
 
 
 @lru_cache()
