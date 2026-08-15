@@ -1,6 +1,27 @@
 """
-Risk scoring engine.
-Aggregates signals from all scan services into a 0–100 risk score.
+Risk scoring engine — v2 (confidence-weighted).
+
+v1 problem: every signal scored as if it were a CONFIRMED threat, including
+weak/ambiguous ones (missing optional headers, single soft keyword). This
+made nearly every pasted email — including completely legitimate ones —
+cross into "suspicious" territory.
+
+v2 fix: signals are split into three confidence tiers.
+  - STRONG  : near-zero false positive rate on their own (malware hash hit,
+              Bitcoin wallet + payment demand together, brand domain spoof
+              with character substitution). These alone can push to HIGH/CRITICAL.
+  - MODERATE: meaningful but not conclusive alone (single auth failure,
+              one suspicious keyword, reply-to mismatch). Needs 2-3 to stack
+              before mattering.
+  - WEAK    : near-zero signal alone (single urgency word, missing OPTIONAL
+              auth header on a body-only paste). These are evidence
+              multipliers, not point sources — they only count when STRONG
+              or MODERATE signals already fired.
+
+Critically: "headers_present" tells us whether this scan had real .eml/raw
+header data at all. If NOT, we skip ALL auth-header penalties entirely,
+because "unknown" in that context means "user pasted plain text", not
+"sender is spoofing". This was the single biggest source of false positives.
 """
 
 from app.config import get_settings
@@ -19,155 +40,216 @@ def compute_email_risk_score(
     weighted_phishing: dict | None = None,
 ) -> tuple[int, str, list]:
     """
-    Compute a 0–100 risk score and determine risk level + threat types.
+    Compute a 0–100 risk score using confidence-weighted, evidence-stacking logic.
     Returns (score, risk_level, threat_types).
     """
-    score = 0
+    strong_score = 0
+    moderate_score = 0
+    weak_signal_count = 0
     threat_types = set()
 
-    # ── Authentication failures (max 35 pts) ─────────────────────
-    if auth.get("spf") == "fail":
-        score += 12
-    elif auth.get("spf") in ("softfail", "neutral"):
-        score += 5
-    elif auth.get("spf") == "unknown":
-        score += 6   # No auth header at all is suspicious
+    # Did this scan actually have raw email headers (.eml / pasted headers),
+    # or just a plain-text body? This gates ALL auth-related scoring.
+    headers_present = _has_real_headers(headers)
 
-    if auth.get("dkim") == "fail":
-        score += 10
-    elif auth.get("dkim") == "none":
-        score += 5
-    elif auth.get("dkim") == "unknown":
-        score += 5   # Missing DKIM suspicious
+    # ════════════════════════════════════════════════════════════
+    # STRONG signals — near-zero false-positive rate alone
+    # ════════════════════════════════════════════════════════════
 
-    if auth.get("dmarc") == "fail":
-        score += 8
-    elif auth.get("dmarc") == "unknown":
-        score += 4   # Missing DMARC suspicious
+    # Confirmed malware via VirusTotal hash/URL match — this is ground truth,
+    # not a heuristic. Always strong regardless of anything else.
+    max_url_detections = max((u.get("vt_result", {}).get("detections", 0) for u in urls), default=0)
+    max_att_detections = max((a.get("vt_result", {}).get("detections", 0) for a in attachments), default=0)
 
-    if all(auth.get(k) == "fail" for k in ("spf", "dkim", "dmarc")):
-        score += 10  # Bonus for triple failure
+    # Ground-truth ceiling: a confirmed multi-engine malware detection or a
+    # heavily-flagged malicious URL is not a heuristic guess — it's a real
+    # antivirus engine consensus. These get a SCORE FLOOR, not just points,
+    # so they can never be diluted down to "medium" risk by a lack of other
+    # signals (a one-line malicious attachment email has no other signals
+    # by design — the attachment IS the whole attack).
+    ground_truth_floor = 0
+
+    if max_att_detections >= 15:
+        strong_score += 60
+        ground_truth_floor = max(ground_truth_floor, 85)  # multi-engine consensus = critical
+        threat_types.add("malicious_attachment")
+    elif max_att_detections >= 5:
+        strong_score += 50
+        ground_truth_floor = max(ground_truth_floor, 75)  # confirmed malware = at least high
+        threat_types.add("malicious_attachment")
+    elif max_att_detections >= 1:
+        strong_score += 30
+        ground_truth_floor = max(ground_truth_floor, 55)
+        threat_types.add("malicious_attachment")
+
+    if max_url_detections >= 15:
+        strong_score += 50
+        ground_truth_floor = max(ground_truth_floor, 80)
+        threat_types.add("suspicious_url")
+    elif max_url_detections >= 10:
+        strong_score += 40
+        ground_truth_floor = max(ground_truth_floor, 70)
+        threat_types.add("suspicious_url")
+    elif max_url_detections >= settings.VT_MALICIOUS_THRESHOLD:
+        strong_score += 25
+        ground_truth_floor = max(ground_truth_floor, 50)
+        threat_types.add("suspicious_url")
+
+    # Confirmed brand impersonation: sender domain uses a character-substituted
+    # or typosquatted version of a real brand domain. Very low false-positive —
+    # legitimate companies don't send mail from typosquats of themselves.
+    if phishing.get("domain_impersonation"):
+        strong_score += 30
         threat_types.add("spoofing")
-    elif all(auth.get(k) == "unknown" for k in ("spf", "dkim", "dmarc")):
-        score += 8   # Bonus: complete absence of auth headers = likely spoofed
-        threat_types.add("header_anomaly")
 
-    # ── IP reputation (max 20 pts) ────────────────────────────────
+    # Bitcoin wallet address actually present in body + a payment demand —
+    # this combination essentially never appears in legitimate mail.
+    if phishing.get("bitcoin_wallet_found") and phishing.get("bitcoin_demand"):
+        strong_score += 35
+        threat_types.add("extortion")
+
+    # Explicit extortion/blackmail language (webcam threats, "I have video of you")
+    # combined with a payment or silence demand — very specific, low FP rate.
+    if phishing.get("extortion") and (phishing.get("webcam_threat") or phishing.get("do_not_contact_instruction")):
+        strong_score += 30
+        threat_types.add("extortion")
+        threat_types.add("social_engineering")
+
+    # All THREE auth checks explicitly FAIL (not unknown — actually failed).
+    # This only happens when we have real headers AND the mail server itself
+    # flagged it. Extremely strong signal.
+    if headers_present and all(auth.get(k) == "fail" for k in ("spf", "dkim", "dmarc")):
+        strong_score += 35
+        threat_types.add("spoofing")
+
+    # ════════════════════════════════════════════════════════════
+    # MODERATE signals — meaningful but need to stack to matter
+    # ════════════════════════════════════════════════════════════
+
+    moderate_hits = []
+
+    # Single auth failures (not full triple-fail) — only counted when we
+    # actually have headers to check. A real SPF/DKIM/DMARC fail is moderate
+    # evidence on its own, two stacking together becomes much stronger.
+    if headers_present:
+        if auth.get("spf") == "fail":
+            moderate_hits.append(("spf_fail", 14))
+        if auth.get("dkim") == "fail":
+            moderate_hits.append(("dkim_fail", 12))
+        if auth.get("dmarc") == "fail":
+            moderate_hits.append(("dmarc_fail", 10))
+
+    if phishing.get("credential_request"):
+        moderate_hits.append(("credential_request", 14))
+
+    if phishing.get("domain_lookalike"):
+        moderate_hits.append(("domain_lookalike", 16))
+
+    if phishing.get("display_name_spoof"):
+        moderate_hits.append(("display_name_spoof", 12))
+
+    if phishing.get("subject_suspicious"):
+        moderate_hits.append(("subject_suspicious", 10))
+
     if ip_reputation:
         ip_risk = ip_reputation.get("risk_level", "unknown")
         confidence = ip_reputation.get("abuse_confidence_score", 0)
         if ip_risk == "high" or confidence >= 80:
-            score += 20
+            moderate_hits.append(("ip_high_abuse", 18))
         elif ip_risk == "medium" or confidence >= 25:
-            score += 12
-        elif ip_risk == "low" or confidence > 0:
-            score += 5
+            moderate_hits.append(("ip_medium_abuse", 10))
         if ip_reputation.get("is_tor"):
-            score += 8
+            moderate_hits.append(("ip_is_tor", 8))
 
-    # ── Phishing indicators (max 30 pts) ─────────────────────────
-    phishing_score = 0
-    if phishing.get("urgency_language"):
-        phishing_score += 5
-    if phishing.get("credential_request"):
-        phishing_score += 10
-    if phishing.get("domain_lookalike"):
-        phishing_score += 15  # Includes sender domain impersonation
-    if phishing.get("display_name_spoof"):
-        phishing_score += 8
-    if phishing.get("reply_to_mismatch"):
-        phishing_score += 5
-    if phishing.get("subject_suspicious"):
-        phishing_score += 8  # Extortion subjects are high severity
-    phishing_score = min(phishing_score, 30)
-    score += phishing_score
-    if phishing_score >= 10:
-        threat_types.add("phishing")
+    if phishing.get("bitcoin_demand") and not phishing.get("bitcoin_wallet_found"):
+        # Mentions bitcoin/crypto but no actual wallet address — moderate, not strong
+        moderate_hits.append(("bitcoin_mention", 10))
 
-    # ── Extortion / sextortion / blackmail (max 40 pts) ──────────
-    extortion_score = 0
-    if phishing.get("extortion"):
-        extortion_score += 20
-        threat_types.add("extortion")
-        threat_types.add("social_engineering")
-    if phishing.get("bitcoin_demand"):
-        extortion_score += 15
-        threat_types.add("extortion")
-    if phishing.get("bitcoin_wallet_found"):
-        extortion_score += 10
-    if phishing.get("webcam_threat"):
-        extortion_score += 15
-        threat_types.add("social_engineering")
-    if phishing.get("do_not_contact_instruction"):
-        extortion_score += 8
-    if phishing.get("domain_impersonation"):
-        extortion_score += 15
-        threat_types.add("spoofing")
-    extortion_score = min(extortion_score, 55)  # Extortion = highest severity
-    score += extortion_score
+    if phishing.get("extortion") and not (phishing.get("webcam_threat") or phishing.get("do_not_contact_instruction")):
+        moderate_hits.append(("extortion_language", 12))
 
-    # ── Weighted keyword bonus (max 15 pts) ───────────────────────
-    kw_score = phishing.get("keyword_score", 0)
-    score += min(20, int(kw_score * 0.20))
-    if kw_score >= 20:
-        threat_types.add("phishing")
-
-    # ── Malicious URLs (max 20 pts) ───────────────────────────────
-    for url in urls:
-        vt = url.get("vt_result", {})
-        detections = vt.get("detections", 0)
-        if detections >= 10:
-            score += 20
-            threat_types.add("suspicious_url")
-            break
-        elif detections >= settings.VT_MALICIOUS_THRESHOLD:
-            score += 12
-            threat_types.add("suspicious_url")
-        elif url.get("is_shortened"):
-            score += 3
-
-    # ── Malicious attachments (max 25 pts) ───────────────────────
-    for att in attachments:
-        vt = att.get("vt_result", {})
-        detections = vt.get("detections", 0)
-        is_dangerous_ext = att.get("is_dangerous_ext", False)
-        if detections >= 5:
-            score += 25
-            threat_types.add("malicious_attachment")
-            break
-        elif detections >= 1:
-            score += 15
-            threat_types.add("malicious_attachment")
-        elif is_dangerous_ext:
-            score += 8
-            threat_types.add("malicious_attachment")
-
-    # ── Header anomalies (max 5 pts) ─────────────────────────────
-    if headers.get("reply_to_mismatch"):
-        score += 3
-        threat_types.add("header_anomaly")
-
-    # ── Received hop anomalies (max 10 pts) ──────────────────────
-    if hop_audit:
-        anomalies = hop_audit.get("anomalies", [])
-        if anomalies:
-            score += min(10, len(anomalies) * 5)
+    # Apply moderate hits with DIMINISHING RETURNS — the 1st hit counts in
+    # full, the 2nd at 85%, the 3rd at 70%, etc. This rewards genuine
+    # multi-signal correlation without letting 5 weak hits = 1 strong hit.
+    moderate_hits.sort(key=lambda x: x[1], reverse=True)
+    for i, (name, weight) in enumerate(moderate_hits):
+        decay = max(0.4, 1.0 - (i * 0.15))
+        moderate_score += weight * decay
+        if name in ("domain_lookalike", "credential_request"):
+            threat_types.add("phishing")
+        if name.endswith("_fail"):
             threat_types.add("header_anomaly")
 
-    # ── Weighted phishing keyword score (max 25 pts) ─────────────
-    if weighted_phishing:
-        wp_score = weighted_phishing.get("score", 0)
-        score += min(25, int(wp_score * 0.25))
-        if wp_score >= 15:
-            threat_types.add("phishing")
+    # ════════════════════════════════════════════════════════════
+    # WEAK signals — multipliers only, never scored alone
+    # ════════════════════════════════════════════════════════════
+    # These only count if at least one MODERATE or STRONG signal already
+    # fired. A clean email with just "urgent" in the subject gets 0 extra
+    # points. A suspicious email with "urgent" ON TOP of other evidence
+    # gets a small boost — because urgency language is a real attacker
+    # pattern, just not diagnostic on its own.
 
-    # ── Cap and classify ─────────────────────────────────────────
-    score = min(score, 100)
+    has_real_evidence = (strong_score > 0) or (len(moderate_hits) > 0)
+
+    if has_real_evidence:
+        if phishing.get("urgency_language"):
+            weak_signal_count += 1
+        if phishing.get("reply_to_mismatch"):
+            weak_signal_count += 1
+        if phishing.get("shortened_urls"):
+            weak_signal_count += 1
+        if headers_present and auth.get("spf") == "unknown":
+            weak_signal_count += 1
+        if headers_present and auth.get("dkim") == "unknown":
+            weak_signal_count += 1
+        if hop_audit and hop_audit.get("anomalies"):
+            weak_signal_count += 1
+
+    weak_bonus = min(15, weak_signal_count * 4)
+
+    # Weighted keyword score — scaled down significantly and gated behind
+    # already having SOME real evidence, since keyword matching alone
+    # (e.g. "account", "verify", "security") fires on tons of legitimate mail.
+    kw_score = phishing.get("keyword_score", 0)
+    weighted_kw = (weighted_phishing or {}).get("score", 0)
+    total_kw = kw_score + weighted_kw
+    if has_real_evidence and total_kw > 0:
+        weak_bonus += min(10, int(total_kw * 0.08))
+    elif total_kw >= 40:
+        # Keyword pile-up alone (no other signal) only matters if it's
+        # genuinely large — e.g. an email saturated with extortion vocabulary
+        weak_bonus += min(8, int((total_kw - 40) * 0.05))
+
+    # ════════════════════════════════════════════════════════════
+    # Final aggregation
+    # ════════════════════════════════════════════════════════════
+    score = strong_score + moderate_score + weak_bonus
+    score = max(0, min(100, round(score)))
+    # Apply ground-truth floor: confirmed VT detections can't be diluted
+    # down by an otherwise-quiet email (no other signals fired)
+    score = max(score, ground_truth_floor)
+
     if score == 0 and not threat_types:
         threat_types.add("clean")
 
     risk_level = _score_to_level(score)
     return score, risk_level, list(threat_types)
+
+
+def _has_real_headers(headers: dict) -> bool:
+    """
+    True only if this scan actually had raw email headers to inspect —
+    i.e. a real .eml file or pasted header block — not just a plain-text
+    body/subject paste. This is the gate that prevents "missing optional
+    header" from being treated the same as "sender failed authentication".
+    """
+    if not headers:
+        return False
+    signal_fields = (
+        "authentication_results", "received", "dkim_signature",
+        "message_id", "return_path",
+    )
+    return any(headers.get(f) for f in signal_fields)
 
 
 def _score_to_level(score: int) -> str:
@@ -177,7 +259,7 @@ def _score_to_level(score: int) -> str:
         return "high"
     if score >= settings.RISK_SCORE_MEDIUM:
         return "medium"
-    if score > 10:
+    if score > 15:
         return "low"
     return "clean"
 
@@ -185,7 +267,7 @@ def _score_to_level(score: int) -> str:
 def summarise(score: int, risk_level: str, threat_types: list) -> str:
     """Generate a human-readable summary string."""
     if risk_level == "clean":
-        return "No threats detected. Email appears legitimate."
+        return "No significant threats detected. Email appears legitimate."
 
     parts = []
     if "extortion" in threat_types:
@@ -205,4 +287,8 @@ def summarise(score: int, risk_level: str, threat_types: list) -> str:
 
     threat_str = ", ".join(parts) if parts else "suspicious activity"
     level_str = risk_level.upper()
+
+    if risk_level == "low":
+        return f"LOW RISK (score {score}/100) — some {threat_str} signals present, but not conclusive. Review before acting."
+
     return f"{level_str} RISK (score {score}/100) — {threat_str} detected."

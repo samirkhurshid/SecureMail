@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Terms of Service — SecureMail</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card-bg: #1e293b;
+      --border: #334155;
+      --t1: #f8fafc;
+      --t2: #cbd5e1;
+      --t3: #94a3b8;
+      --accent: #818cf8;
+      --accent-glow: rgba(129, 140, 248, 0.15);
+      --r-md: 12px;
+      --r-sm: 8px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+      background-color: var(--bg);
+      color: var(--t2);
+      line-height: 1.6;
+      padding: 32px 16px;
+    }
+
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 32px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+    }
+
+    .logo-img-wrap {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      box-shadow: 0 4px 14px rgba(139, 92, 246, 0.35);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .logo:hover .logo-img-wrap {
+      box-shadow: 0 0 20px rgba(139, 92, 246, 0.6);
+      transform: scale(1.05);
+    }
+
+    .logo-text {
+      font-size: 20px;
+      font-weight: 800;
+      letter-spacing: -0.3px;
+      background: linear-gradient(135deg, #60a5fa, #a78bfa, #f472b6);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .nav-btn {
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--t1);
+      border: 1px solid var(--border);
+      padding: 8px 16px;
+      border-radius: var(--r-sm);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 600;
+      transition: background 0.2s;
+    }
+
+    .nav-btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--r-md);
+      padding: 32px;
+      margin-bottom: 24px;
+    }
+
+    h1 {
+      font-size: 28px;
+      color: var(--t1);
+      margin-bottom: 8px;
+    }
+
+    .meta {
+      font-size: 13px;
+      color: var(--t3);
+      margin-bottom: 24px;
+    }
+
+    h2 {
+      font-size: 18px;
+      color: var(--t1);
+      margin-top: 28px;
+      margin-bottom: 12px;
+    }
+
+    p {
+      margin-bottom: 14px;
+      font-size: 14.5px;
+    }
+
+    ul {
+      margin-bottom: 16px;
+      padding-left: 20px;
+    }
+
+    li {
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+
+    .footer {
+      text-align: center;
+      font-size: 13px;
+      color: var(--t3);
+      margin-top: 32px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border);
+    }
+
+    .footer a {
+      color: var(--accent);
+      text-decoration: none;
+      margin: 0 8px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <a href="index.html" class="logo">
+        <div class="logo-img-wrap">
+          <img src="logo.png" alt="SecureMail Logo" style="width:100%; height:100%; border-radius:6px; object-fit:contain;">
+        </div>
+        <span class="logo-text">SecureMail</span>
+      </a>
+      <a href="index.html" class="nav-btn">Back to App</a>
+    </div>
+
+    <div class="card">
+      <h1>Terms of Service</h1>
+      <div class="meta">Last updated: August 10, 2026</div>
+
+      <p>
+        Welcome to <strong>SecureMail</strong>. By accessing our application, website, or associated services, you agree to be bound by these Terms of Service ("Terms"). Please read them carefully before using our platform.
+      </p>
+
+      <h2>1. Description of Service</h2>
+      <p>
+        SecureMail provides email security analysis, header routing trace, phishing heuristic detection, URL and attachment reputation scoring, AI-powered threat explanations, browser extension scanning, weekly digest reports, and webhook alerts.
+      </p>
+
+      <h2>2. Account Responsibilities</h2>
+      <ul>
+        <li>You must provide accurate information when creating an account and keep your authentication credentials confidential.</li>
+        <li>You are responsible for all security analysis activities conducted under your registered account credentials.</li>
+        <li>Accounts are intended for individual use per person or organization. Shared credentials or account resale are prohibited.</li>
+      </ul>
+
+      <h2>3. Acceptable Use Policy</h2>
+      <p>You agree NOT to use SecureMail to:</p>
+      <ul>
+        <li>Scan or inspect email communications or data without authorization or legal right to analyze.</li>
+        <li>Attempt to bypass, defeat, or manipulate rate limits, API quotas, or the 5-scan/day anonymous free trial system via proxy rotation or automated spoofing.</li>
+        <li>Reverse engineer, overload, or launch denial-of-service attacks against SecureMail's API endpoints or third-party partner services.</li>
+        <li>Use the platform for any illegal purpose or in violation of applicable privacy regulations.</li>
+      </ul>
+
+      <h2>4. Free Trial & Account Tiers</h2>
+      <p>
+        Unauthenticated visitors receive an <strong>Anonymous Free Trial</strong> capped at 5 scans per calendar day per IP address, resetting at 12:00 AM India Standard Time (UTC+5:30). Authenticated accounts currently enjoy unlimited scanning privileges, subject to rate limiting controls and fair usage policies.
+      </p>
+
+      <h2>5. Service Availability & Disclaimer</h2>
+      <p>
+        SecureMail is provided on a <strong>best-effort basis</strong> without warranty of continuous uptime, speed, or uninterrupted service. We reserve the right to modify, suspend, or update API endpoints and threat engines as necessary for system maintenance and security enhancements.
+      </p>
+
+      <h2>6. Limitation of Liability & Threat Detection Disclaimer</h2>
+      <p>
+        Threat detection algorithms and third-party reputation engines analyze threat indicators probabilistically. <strong>SecureMail does not guarantee 100% detection of all cyber threats, phishing attempts, or malware.</strong> False positives and false negatives may occur.
+      </p>
+      <p>
+        SecureMail shall not be liable for any indirect, incidental, consequential, or punitive damages, or for any loss of data or business disruption resulting from your use of or reliance on scan verdicts provided by the service.
+      </p>
+
+      <h2>7. Account Termination & 7-Day Grace Period</h2>
+      <p>
+        You may request account deletion at any time via your Account settings. Upon request, active sessions are immediately revoked, entering a 7-day soft-delete grace period before permanent, unrecoverable purge. We reserve the right to suspend or terminate accounts that violate our Acceptable Use Policy.
+      </p>
+
+      <h2>8. Changes to Terms</h2>
+      <p>
+        We may update these Terms from time to time. Material changes will be reflected by an updated "Last updated" date on this page and communicated to registered users via email where applicable.
+      </p>
+
+      <h2>9. Governing Law</h2>
+      <p>
+        These Terms shall be governed by and construed in accordance with the laws of <strong>[Jurisdiction]</strong> <!-- Note: Fill in legal jurisdiction based on operator's location before public release -->, without regard to its conflict of law provisions.
+      </p>
+
+      <h2>10. Contact Information</h2>
+      <p>
+        For legal inquiries or questions regarding these Terms of Service, please contact:
+      </p>
+      <p>
+        <strong>Legal Contact:</strong> <a href="mailto:legal@yourdomain.com" style="color:var(--accent);">legal@yourdomain.com</a> <!-- Note: Configure real monitored address before public deployment -->
+      </p>
+    </div>
+
+    <div class="footer">
+      &copy; 2026 SecureMail Security Gateway. All rights reserved.
+      <br>
+      <a href="privacy.html">Privacy Policy</a> | <a href="terms.html">Terms of Service</a>
+    </div>
+  </div>
+</body>
+</html>

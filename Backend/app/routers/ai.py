@@ -9,8 +9,8 @@ import json
 import httpx
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
-from typing import Optional, List
+from pydantic import BaseModel, model_validator
+from typing import Optional, List, Dict, Any
 from app.config import get_settings
 from app.utils.logger import setup_logger
 
@@ -30,16 +30,36 @@ class ExplainRequest(BaseModel):
     header_analysis: dict = {}
     urls: List[dict] = []
     attachments: List[dict] = []
+    quishing: Optional[dict] = None
+
+    @model_validator(mode='before')
+    @classmethod
+    def unpack_nested_scan_result(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            # If payload is wrapped inside {"scan_result": {...}}
+            if "scan_result" in data and isinstance(data["scan_result"], dict):
+                merged = {**data["scan_result"]}
+                return merged
+        return data
 
 
 def _build_prompt(d: ExplainRequest) -> str:
     """Build a rich, data-specific prompt from scan result."""
-    ph   = d.phishing
-    auth = d.authentication
-    h    = d.header_analysis
+    ph   = d.phishing or {}
+    auth = d.authentication or {}
+    h    = d.header_analysis or {}
     ip   = h.get("ip_reputation", {}) or {}
+    q    = d.quishing or {}
 
     signals = []
+    if q.get("has_qr_codes"):
+        qr_count = q.get("qr_count", len(q.get("detections", [])))
+        signals.append(f"Quishing attack with {qr_count} embedded QR code(s) detected bypassing text-based filters")
+        for det in q.get("detections", [])[:2]:
+            if det.get("decoded_payload"):
+                signals.append(f"QR payload: {det['decoded_payload']}")
+            if det.get("threat_indicators"):
+                signals.extend(det["threat_indicators"])
     if ph.get("extortion"):              signals.append("extortion/sextortion content")
     if ph.get("bitcoin_demand"):         signals.append("Bitcoin payment demand")
     if ph.get("webcam_threat"):          signals.append("webcam/spyware blackmail threat")
@@ -100,15 +120,29 @@ Keep each section to 2-4 sentences or bullets. Use plain English. Be direct."""
 @router.post("/explain", summary="Stream an AI explanation of a scan result")
 async def explain_threat(request: ExplainRequest):
     """
-    Proxies to Anthropic Claude API with streaming.
-    The Anthropic API key NEVER leaves the server — frontend only calls this endpoint.
+    Proxies to Google Gemini API (preferred free tier) or Anthropic Claude API with streaming.
+    All keys stay 100% server-side.
     """
     s = get_settings()
 
-    if not s.ANTHROPIC_API_KEY:
+    if not s.GEMINI_API_KEY and not s.ANTHROPIC_API_KEY:
         raise HTTPException(
             status_code=503,
-            detail="AI explanation unavailable — ANTHROPIC_API_KEY not configured on server"
+            detail="AI explanation unavailable — GEMINI_API_KEY or ANTHROPIC_API_KEY not configured on server"
+        )
+
+    if s.GEMINI_API_KEY and not (s.GEMINI_API_KEY.startswith("AIzaSy") or s.GEMINI_API_KEY.startswith("AQ.")):
+        raise HTTPException(
+            status_code=503,
+            detail="GEMINI_API_KEY is set but invalid (must start with 'AIzaSy' or 'AQ.'). "
+                   "Get a real key at https://aistudio.google.com/app/apikey"
+        )
+
+    if s.ANTHROPIC_API_KEY and not s.GEMINI_API_KEY and not s.ANTHROPIC_API_KEY.startswith("sk-ant-"):
+        raise HTTPException(
+            status_code=503,
+            detail="ANTHROPIC_API_KEY is set but invalid (must start with 'sk-ant-'). "
+                   "Get a real key at https://console.anthropic.com/settings/keys"
         )
 
     if request.risk_level == "clean" or request.risk_score == 0:
@@ -116,10 +150,55 @@ async def explain_threat(request: ExplainRequest):
 
     prompt = _build_prompt(request)
 
+    async def stream_gemini():
+        """Stream SSE events from Gemini, translate them to Anthropic structure, and forward."""
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse&key={s.GEMINI_API_KEY}"
+        payload = {
+            "contents": [{
+                "role": "user",
+                "parts": [{"text": prompt}]
+            }]
+        }
+        headers = {"Content-Type": "application/json"}
+        try:
+            async with httpx.AsyncClient(timeout=60) as client:
+                async with client.stream("POST", url, json=payload, headers=headers) as resp:
+                    if resp.status_code == 400:
+                        yield f"data: {json.dumps({'error': 'invalid_request'})}\n\n"
+                        return
+                    if resp.status_code in (401, 403):
+                        yield f"data: {json.dumps({'error': 'invalid_api_key'})}\n\n"
+                        return
+                    if resp.status_code == 429:
+                        yield f"data: {json.dumps({'error': 'rate_limited'})}\n\n"
+                        return
+                    if resp.status_code != 200:
+                        yield f"data: {json.dumps({'error': f'http_{resp.status_code}'})}\n\n"
+                        return
+
+                    async for line in resp.aiter_lines():
+                        if line.startswith("data: "):
+                            raw_data = line[6:].strip()
+                            try:
+                                chunk_data = json.loads(raw_data)
+                                text = chunk_data.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+                                if text:
+                                    # Translate to Anthropic content delta event
+                                    yield f"data: {json.dumps({'type': 'content_block_delta', 'delta': {'type': 'text_delta', 'text': text}})}\n\n"
+                            except Exception as pe:
+                                logger.error(f"Gemini parse chunk error: {pe} for line: {line}")
+                        elif line == "":
+                            continue
+        except httpx.ConnectError:
+            yield f"data: {json.dumps({'error': 'unreachable'})}\n\n"
+        except Exception as e:
+            logger.error(f"Gemini explain stream error: {e}")
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+
     async def stream_claude():
         """Stream SSE events from Anthropic and forward them to the browser."""
         payload = {
-            "model": "claude-sonnet-4-6",
+            "model": "claude-3-5-sonnet-20241022",
             "max_tokens": 1000,
             "stream": True,
             "messages": [{"role": "user", "content": prompt}],
@@ -129,7 +208,6 @@ async def explain_threat(request: ExplainRequest):
             "anthropic-version": "2023-06-01",
             "content-type": "application/json",
         }
-
         try:
             async with httpx.AsyncClient(timeout=60) as client:
                 async with client.stream(
@@ -153,30 +231,72 @@ async def explain_threat(request: ExplainRequest):
                             yield f"{line}\n\n"
                         elif line == "":
                             continue
-
         except httpx.ConnectError:
             yield f"data: {json.dumps({'error': 'unreachable'})}\n\n"
         except Exception as e:
             logger.error(f"AI explain stream error: {e}")
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
 
-    return StreamingResponse(
-        stream_claude(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",
-        },
-    )
+    if s.GEMINI_API_KEY:
+        return StreamingResponse(
+            stream_gemini(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
+        )
+    else:
+        return StreamingResponse(
+            stream_claude(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
+        )
 
 
 @router.get("/status", summary="Check if AI explanation is available")
 async def ai_status():
-    """Returns whether AI explanation is configured — without revealing the key."""
+    """
+    Returns whether AI explanation is configured — without revealing the key.
+    Also validates key FORMAT (not just presence) to catch copy-paste mistakes
+    like pasting an OAuth token instead of an API key.
+    """
     s = get_settings()
-    configured = bool(s.ANTHROPIC_API_KEY)
-    return {
-        "available": configured,
-        "model": "claude-sonnet-4-6" if configured else None,
-        "message": "AI explanation ready" if configured else "ANTHROPIC_API_KEY not set in .env",
-    }
+
+    if s.GEMINI_API_KEY:
+        if not (s.GEMINI_API_KEY.startswith("AIzaSy") or s.GEMINI_API_KEY.startswith("AQ.")):
+            return {
+                "available": False,
+                "model": None,
+                "message": (
+                    "GEMINI_API_KEY is set but doesn't look like a valid key "
+                    "(should start with 'AIzaSy' or 'AQ.'). Get one at "
+                    "https://aistudio.google.com/app/apikey"
+                ),
+            }
+        return {
+            "available": True,
+            "model": "gemini-2.5-flash",
+            "message": "AI explanation ready (using Google Gemini)",
+        }
+
+    elif s.ANTHROPIC_API_KEY:
+        if not s.ANTHROPIC_API_KEY.startswith("sk-ant-"):
+            return {
+                "available": False,
+                "model": None,
+                "message": (
+                    "ANTHROPIC_API_KEY is set but doesn't look like a valid key "
+                    "(should start with 'sk-ant-'). Get one at "
+                    "https://console.anthropic.com/settings/keys"
+                ),
+            }
+        return {
+            "available": True,
+            "model": "claude-3-5-sonnet-20241022",
+            "message": "AI explanation ready (using Anthropic Claude)",
+        }
+
+    else:
+        return {
+            "available": False,
+            "model": None,
+            "message": "GEMINI_API_KEY or ANTHROPIC_API_KEY not set in .env",
+        }

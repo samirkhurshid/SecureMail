@@ -8,12 +8,15 @@ POST /api/scan/ip     — Single IP reputation check via AbuseIPDB
 import uuid
 import time
 import asyncio
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends, Request
 from app.models.schemas import EmailScanRequest, URLScanRequest, IPCheckRequest
-from app.services import virustotal, abuseipdb, email_parser, risk_scorer
+from app.services import virustotal, abuseipdb, email_parser, risk_scorer, usage_tracker, qr_scanner
 from app.services.forensics import save_forensic_log
+from app.services.simple_rate_limiter import get_client_ip
+from app.services.anonymous_quota import check_and_increment_anon_quota, get_anon_quota, get_next_reset_time_ist
 from app.utils.logger import setup_logger
-from typing import Any, Dict
+from app.auth import get_current_user, get_optional_user, CurrentUser
+from typing import Any, Dict, Optional
 
 logger = setup_logger(__name__)
 router = APIRouter()
@@ -48,25 +51,19 @@ _EMAIL_SCAN_EXAMPLE = {
         "anomalies": [
             "Display name impersonates a known brand",
             "Reply-To domain differs from sender domain",
-            "SPF FAIL", "DMARC policy failed",
+            "SPF authentication failed",
+            "DKIM signature missing or invalid",
+            "DMARC policy failed",
         ],
     },
     "urls": [
         {
-            "url": "http://paypa1-login.ru/verify",
-            "domain": "paypa1-login.ru",
-            "is_lookalike": True,
-            "vt_result": {"risk_level": "high", "detections": 34, "total_engines": 87},
+            "url": "http://paypa1-login.ru/verify?token=abc123",
+            "vt_result": {"detections": 34, "risk_level": "high"},
         }
     ],
     "attachments": [],
-    "phishing": {
-        "urgency_language": True,
-        "credential_request": True,
-        "domain_lookalike": True,
-        "display_name_spoof": True,
-        "mitre_techniques": ["T1566.001", "T1036.005"],
-    },
+    "phishing": {"urgency_language": True, "credential_request": True},
 }
 
 _URL_SCAN_EXAMPLE = {
@@ -101,6 +98,33 @@ _IP_CHECK_EXAMPLE = {
 }
 
 
+@router.get("/quota", summary="Get remaining anonymous free trial scans for requesting IP")
+async def get_scan_quota(
+    http_request: Request,
+    user: Optional[CurrentUser] = Depends(get_optional_user),
+) -> Dict[str, Any]:
+    """
+    Returns anonymous daily scan quota for requesting IP (limit 5/day, resetting at midnight IST).
+    If user is authenticated, indicates unlimited access.
+    """
+    if user is not None:
+        return {
+            "unlimited": True,
+            "user_id": user.uid,
+            "message": "Unlimited scanning enabled for signed-in accounts.",
+        }
+
+    client_ip = get_client_ip(http_request)
+    used = get_anon_quota(client_ip)
+    return {
+        "used": used,
+        "remaining": max(0, 5 - used),
+        "limit": 5,
+        "resets_at": get_next_reset_time_ist(),
+    }
+
+
+@router.post("")
 @router.post(
     "/email",
     summary="Full email security scan",
@@ -108,26 +132,35 @@ _IP_CHECK_EXAMPLE = {
     responses={
         200: {"description": "Scan completed", "content": {"application/json": {"example": _EMAIL_SCAN_EXAMPLE}}},
         400: {"description": "No scannable input provided"},
+        429: {"description": "Anonymous daily scan limit reached (5 free scans/day reset at midnight IST)"},
     },
 )
-async def scan_email(request: EmailScanRequest, background_tasks: BackgroundTasks) -> Dict[str, Any]:
+async def scan_email(
+    request: EmailScanRequest,
+    background_tasks: BackgroundTasks,
+    http_request: Request,
+    user: Optional[CurrentUser] = Depends(get_optional_user),
+) -> Dict[str, Any]:
     """
     Run a full security scan on a raw email.
-
-    Pipeline:
-    1. Parse raw email / headers
-    2. SPF / DKIM / DMARC authentication analysis
-    3. Originating IP → AbuseIPDB reputation
-    4. Extract URLs → VirusTotal check
-    5. Extract attachments → VirusTotal hash lookup
-    6. Phishing heuristics
-    7. Risk scoring and forensic log
-
-    Accepts raw .eml, pasted headers+body, or individual fields.
+    Supports both authenticated scanning (unlimited) and anonymous trial scanning (5 free scans/day per IP).
     """
+    if user is None:
+        client_ip = get_client_ip(http_request)
+        allowed, current_count = check_and_increment_anon_quota(client_ip)
+        if not allowed:
+            raise HTTPException(
+                status_code=429,
+                detail={
+                    "error": "daily_limit_reached",
+                    "message": "You've used your 5 free scans for today. Sign up for unlimited scanning, or come back after midnight IST.",
+                    "resets_at": get_next_reset_time_ist(),
+                },
+            )
+
     start = time.time()
     scan_id = str(uuid.uuid4())
-    logger.info(f"[{scan_id}] Starting email scan")
+    logger.info(f"[{scan_id}] Starting email scan for user {user.uid if user else 'anonymous'}")
 
     # ── Step 1: Parse ─────────────────────────────────────────────
     parsed = {}
@@ -189,6 +222,29 @@ async def scan_email(request: EmailScanRequest, background_tasks: BackgroundTask
             vt_att = await virustotal.scan_file_hash(att["sha256"])
             attachment_results.append({**att, "vt_result": vt_att})
 
+    # ── Step 5.5: Quishing (QR Code) Security Analysis ───────────
+    quishing_result = {"has_qr_codes": False, "qr_count": 0, "risk_level": "clean", "risk_score": 0, "detections": []}
+    if request.raw_email:
+        try:
+            quishing_result = qr_scanner.scan_email_for_quishing(request.raw_email, parsed)
+            if quishing_result.get("has_qr_codes"):
+                for det in quishing_result.get("detections", []):
+                    if det.get("payload_type") == "url" and det.get("decoded_payload"):
+                        qr_url = det["decoded_payload"]
+                        try:
+                            vt_res = await virustotal.scan_url(qr_url)
+                            det["vt_result"] = vt_res
+                            if vt_res and isinstance(vt_res, dict):
+                                detections = vt_res.get("detections", 0)
+                                if detections > 0:
+                                    det["risk_score"] = min(100, det["risk_score"] + (detections * 15))
+                                    det["risk_level"] = "critical" if det["risk_score"] >= 80 else "high"
+                                    det["threat_indicators"].append(f"VirusTotal flagged QR destination as malicious ({detections} AV engines)")
+                        except Exception:
+                            pass
+        except Exception as e:
+            logger.warning(f"[{scan_id}] Quishing analysis error: {e}")
+
     # ── Heuristics extracts ───────────────────────────────────────
     hop_audit = parsed.get("received_hop_audit")
     weighted_phishing = parsed.get("weighted_phishing_analysis")
@@ -204,6 +260,19 @@ async def scan_email(request: EmailScanRequest, background_tasks: BackgroundTask
         hop_audit=hop_audit,
         weighted_phishing=weighted_phishing,
     )
+
+    # Incorporate Quishing risk score & threat classification
+    if quishing_result.get("has_qr_codes") and quishing_result.get("risk_score", 0) >= 35:
+        score = max(score, quishing_result["risk_score"])
+        if "quishing" not in threat_types:
+            threat_types.append("quishing")
+        if score >= 80:
+            risk_level = "critical"
+        elif score >= 55:
+            risk_level = "high"
+        elif score >= 35:
+            risk_level = "medium"
+
     summary = risk_scorer.summarise(score, risk_level, threat_types)
     duration_ms = round((time.time() - start) * 1000)
 
@@ -211,6 +280,8 @@ async def scan_email(request: EmailScanRequest, background_tasks: BackgroundTask
         "scan_id": scan_id,
         "scanned_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "scan_duration_ms": duration_ms,
+        "user_id": user.uid if user else None,
+        "user_email": user.email if user else None,
         "risk_score": score,
         "risk_level": risk_level,
         "threat_types": threat_types,
@@ -234,33 +305,55 @@ async def scan_email(request: EmailScanRequest, background_tasks: BackgroundTask
         "phishing": phishing,
         "received_hop_audit": hop_audit,
         "weighted_phishing_analysis": weighted_phishing,
+        "quishing": quishing_result,
     }
 
-    # ── Step 7: Auto-save forensic log ───────────────────────────
-    if risk_level not in ("clean", "unknown"):
-        background_tasks.add_task(save_forensic_log, result)
+    # ── Step 7: Auto-save forensic log & record scan usage for real scans ────────────
+    if user and user.uid:
+        background_tasks.add_task(usage_tracker.record_scan_usage, user.uid)
+        if risk_level not in ("clean", "unknown"):
+            background_tasks.add_task(save_forensic_log, result, user.uid)
+
+        if risk_level in ("high", "critical"):
+            from app.services import user_service, webhook_notifier
+            user_doc = user_service.get_or_create_user_doc(user.uid)
+            webhook_url = user_doc.get("webhook_url")
+            if webhook_url and webhook_url.strip():
+                background_tasks.add_task(webhook_notifier.notify_webhook, webhook_url, result)
 
     logger.info(f"[{scan_id}] Scan complete: {risk_level} ({score}/100) in {duration_ms}ms")
     return result
 
 
-@router.post("/url", summary="Scan a single URL via VirusTotal",
-    response_description="VirusTotal scan result with detection count and risk level",
-    responses={200: {"content": {"application/json": {"example": _URL_SCAN_EXAMPLE}}}})
-async def scan_url(request: URLScanRequest) -> Dict[str, Any]:
-    """Check a URL against VirusTotal's 87+ AV engines."""
-    logger.info(f"URL scan: {request.url[:80]}")
+@router.post("/url", summary="Scan a single URL via VirusTotal", response_model=Dict[str, Any])
+async def scan_url(
+    request: URLScanRequest,
+    background_tasks: BackgroundTasks,
+    http_request: Request,
+    user: Optional[CurrentUser] = Depends(get_optional_user)
+) -> Dict[str, Any]:
+    """Submit a URL to VirusTotal and return detection statistics."""
+    if user is None:
+        client_ip = get_client_ip(http_request)
+        allowed, current_count = check_and_increment_anon_quota(client_ip)
+        if not allowed:
+            raise HTTPException(
+                status_code=429,
+                detail={
+                    "error": "daily_limit_reached",
+                    "message": "You've used your 5 free scans for today. Sign up for unlimited scanning, or come back after midnight IST.",
+                    "resets_at": get_next_reset_time_ist(),
+                },
+            )
+
+    logger.info(f"URL scan request: {request.url}")
     result = await virustotal.scan_url(request.url)
-    return {
-        "url": request.url,
-        "scan_result": result,
-        "scanned_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-    }
+    if user and user.uid:
+        background_tasks.add_task(usage_tracker.record_scan_usage, user.uid)
+    return {"url": request.url, "scan_result": result}
 
 
-@router.post("/ip", summary="Check IP reputation via AbuseIPDB",
-    response_description="IP abuse history, geolocation, ISP and risk level",
-    responses={200: {"content": {"application/json": {"example": _IP_CHECK_EXAMPLE}}}})
+@router.post("/ip", summary="Check IP reputation via AbuseIPDB", response_model=Dict[str, Any])
 async def check_ip(request: IPCheckRequest) -> Dict[str, Any]:
     """Query AbuseIPDB for an IP address abuse history and geolocation."""
     logger.info(f"IP check: {request.ip}")
@@ -273,8 +366,11 @@ async def check_ip(request: IPCheckRequest) -> Dict[str, Any]:
 
 
 @router.get("/demo", summary="Run a demo scan with sample phishing email")
-async def demo_scan(background_tasks: BackgroundTasks):
-    """Runs a scan on a built-in phishing email sample — useful for testing."""
+async def demo_scan(http_request: Request, user: CurrentUser = Depends(get_current_user)):
+    """
+    Runs a scan on a built-in phishing email sample — useful for testing.
+    Demo scans do NOT persist to the user's forensic log history.
+    """
     sample_eml = """From: PayPal Support <noreply@paypa1-support.ru>
 Reply-To: help@secure-login.net
 To: victim@example.com
@@ -300,7 +396,9 @@ Your account will be closed in 24 hours if no action is taken.
 PayPal Security Team
 """
     req = EmailScanRequest(raw_email=sample_eml)
-    return await scan_email(req, background_tasks)
+    # Pass empty background tasks to prevent demo scans from being saved to forensics
+    dummy_bg = BackgroundTasks()
+    return await scan_email(request=req, background_tasks=dummy_bg, http_request=http_request, user=user)
 
 
 def _collect_anomalies(headers: dict, auth: dict) -> list:

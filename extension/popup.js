@@ -8,6 +8,237 @@ let API_BASE = 'http://localhost:8000/api';
 let _pendingEmailData = null; // extracted email waiting for user to click "Scan This Email"
 let _currentPlatform  = null; // platform of the active mail-client tab
 let _currentTab       = null; // active tab reference
+let _vtEnabled = true;
+let _abuseEnabled = true;
+let _aiEnabled = true;
+let _currentScanData = null; // current scan results reference
+
+async function getFirebaseKey() {
+  const data = await chrome.storage.local.get(['firebaseApiKey']);
+  if (data.firebaseApiKey) return data.firebaseApiKey;
+  try {
+    const resp = await fetch(`${API_BASE}/auth/config`);
+    if (resp.ok) {
+      const cfg = await resp.json();
+      if (cfg.apiKey) {
+        await chrome.storage.local.set({ firebaseApiKey: cfg.apiKey });
+        return cfg.apiKey;
+      }
+    }
+  } catch (e) {}
+  return '';
+}
+
+// ── Extension Authentication System ──────────────────────────────────────────
+async function getValidToken() {
+  const data = await chrome.storage.local.get(['authToken', 'refreshToken', 'tokenExpiry', 'userEmail']);
+  if (!data.authToken) return null;
+  const now = Date.now();
+  // If token has > 5 minutes remaining (300,000 ms), return cached token
+  if (data.tokenExpiry && (data.tokenExpiry - now) > 300000) {
+    return data.authToken;
+  }
+  // Token expired or about to expire: attempt refresh
+  if (!data.refreshToken) {
+    await clearAuthStorage();
+    return null;
+  }
+  try {
+    const apiKey = await getFirebaseKey();
+    if (!apiKey) return null;
+    const resp = await fetch(`https://securetoken.googleapis.com/v1/token?key=${apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'refresh_token',
+        refresh_token: data.refreshToken
+      })
+    });
+    if (!resp.ok) {
+      await clearAuthStorage();
+      return null;
+    }
+    const json = await resp.json();
+    const newToken = json.id_token;
+    const newRefresh = json.refresh_token || data.refreshToken;
+    const expiresIn = parseInt(json.expires_in || '3600', 10);
+    const newExpiry = Date.now() + (expiresIn * 1000);
+
+    await chrome.storage.local.set({
+      authToken: newToken,
+      refreshToken: newRefresh,
+      tokenExpiry: newExpiry
+    });
+    return newToken;
+  } catch (e) {
+    console.warn('SecureMail: token refresh failed', e);
+    await clearAuthStorage();
+    return null;
+  }
+}
+
+async function clearAuthStorage() {
+  await chrome.storage.local.remove(['authToken', 'refreshToken', 'tokenExpiry', 'userEmail']);
+}
+
+async function doExtensionSignIn() {
+  const emailEl = document.getElementById('ext-auth-email');
+  const passEl  = document.getElementById('ext-auth-password');
+  const btn     = document.getElementById('ext-auth-btn');
+
+  const email = emailEl?.value?.trim();
+  const pass  = passEl?.value;
+
+  if (!email || !pass) {
+    showAuthErr('Please enter both email and password.');
+    return;
+  }
+
+  if (btn) { btn.disabled = true; btn.textContent = 'Signing in…'; }
+  showAuthErr('');
+
+  try {
+    const apiKey = await getFirebaseKey();
+    if (!apiKey) throw new Error('Authentication configuration unavailable. Ensure SecureMail server is running.');
+    const resp = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password: pass, returnSecureToken: true })
+    });
+
+    const json = await resp.json();
+    if (!resp.ok) {
+      const code = json.error?.message || 'Authentication failed';
+      throw new Error(formatAuthErr(code));
+    }
+
+    const idToken = json.idToken;
+    const refreshToken = json.refreshToken;
+    const expiresIn = parseInt(json.expiresIn || '3600', 10);
+    const expiry = Date.now() + (expiresIn * 1000);
+    const userEmail = json.email || email;
+
+    await chrome.storage.local.set({
+      authToken: idToken,
+      refreshToken: refreshToken,
+      tokenExpiry: expiry,
+      userEmail: userEmail
+    });
+
+    updateAuthUI(userEmail);
+    // Trigger backend check & tab detection after successful sign-in
+    initAfterAuth();
+  } catch(e) {
+    showAuthErr(e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Sign In'; }
+  }
+}
+
+async function doExtensionSignOut() {
+  await clearAuthStorage();
+  updateAuthUI(null);
+}
+
+function showAuthErr(msg) {
+  const el = document.getElementById('ext-auth-err');
+  if (!el) return;
+  el.textContent = msg;
+  el.style.display = msg ? 'block' : 'none';
+}
+
+function formatAuthErr(code) {
+  if (code === 'INVALID_PASSWORD' || code === 'EMAIL_NOT_FOUND' || code === 'INVALID_LOGIN_CREDENTIALS') {
+    return 'Invalid email or password.';
+  }
+  if (code === 'USER_DISABLED') return 'This user account has been disabled.';
+  if (code === 'TOO_MANY_ATTEMPTS_TRY_LATER') return 'Too many failed attempts. Try again later.';
+  return code;
+}
+
+async function updateAuthUI(userEmail, mode) {
+  const authView = document.getElementById('ext-auth-view');
+  const mainView = document.getElementById('ext-main-view');
+  const userBar  = document.getElementById('ext-user-bar');
+  const anonBar  = document.getElementById('ext-anon-bar');
+  const emailEl  = document.getElementById('ext-user-email');
+
+  if (userEmail || mode === 'authenticated') {
+    if (authView) authView.style.display = 'none';
+    if (mainView) mainView.style.display = 'block';
+    if (userBar)  userBar.style.display = 'flex';
+    if (anonBar)  anonBar.style.display = 'none';
+    if (emailEl && userEmail) emailEl.textContent = userEmail;
+  } else if (mode === 'auth_form') {
+    if (authView) authView.style.display = 'block';
+    if (mainView) mainView.style.display = 'none';
+    if (userBar)  userBar.style.display = 'none';
+    if (anonBar)  anonBar.style.display = 'none';
+  } else {
+    // Mode = 'anonymous' (unauthenticated default view)
+    if (authView) authView.style.display = 'none';
+    if (mainView) mainView.style.display = 'block';
+    if (userBar)  userBar.style.display = 'none';
+    if (anonBar)  anonBar.style.display = 'flex';
+    loadExtQuota();
+  }
+}
+
+async function loadExtQuota() {
+  const quotaEl = document.getElementById('ext-quota-text');
+  if (!quotaEl) return;
+  try {
+    const res = await fetch(`${API_BASE}/scan/quota`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.unlimited) {
+        quotaEl.innerHTML = `⚡ <strong>Unlimited scanning active</strong>`;
+      } else {
+        const rem = data.remaining ?? 5;
+        const limit = data.limit ?? 5;
+        quotaEl.innerHTML = `⚡ Free Trial: <strong>${rem} of ${limit} scans remaining</strong>`;
+      }
+    }
+  } catch (e) {
+    quotaEl.innerHTML = `⚡ Free Trial: <strong>5 scans / day</strong>`;
+  }
+}
+
+function showLimitAndPromptAuth(msg, resetsAt) {
+  updateAuthUI(null, 'auth_form');
+  const errEl = document.getElementById('ext-auth-err');
+  if (errEl) {
+    const timeStr = resetsAt ? new Date(resetsAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'midnight IST';
+    errEl.innerHTML = `⚡ <strong>Daily Free Trial Limit Reached (5/5 scans used)</strong><br>${esc(msg)}<br><span style="font-size:10.5px;opacity:0.85">Resets at ${esc(timeStr)}. Sign in or create an account to continue.</span>`;
+    errEl.style.display = 'block';
+  }
+}
+
+async function optionalAuthFetch(url, options = {}) {
+  const token = await getValidToken();
+  const headers = options.headers ? { ...options.headers } : {};
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  if (!headers['Content-Type'] && options.body && typeof options.body === 'string') {
+    headers['Content-Type'] = 'application/json';
+  }
+  return await fetch(url, { ...options, headers });
+}
+
+async function authFetch(url, options = {}) {
+  const token = await getValidToken();
+  if (!token) {
+    updateAuthUI(null, 'auth_form');
+    throw new Error('Not authenticated. Please sign in to SecureMail.');
+  }
+  const headers = options.headers ? { ...options.headers } : {};
+  headers['Authorization'] = `Bearer ${token}`;
+  if (!headers['Content-Type'] && options.body && typeof options.body === 'string') {
+    headers['Content-Type'] = 'application/json';
+  }
+  return await fetch(url, { ...options, headers });
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // INIT
@@ -18,6 +249,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   } catch (e) {
     console.warn('SecureMail: loadSettings failed', e);
   }
+
+  // ── Auth buttons & Enter key listeners ─────────────────────────────────────
+  document.getElementById('ext-auth-btn')?.addEventListener('click', doExtensionSignIn);
+  document.getElementById('btn-ext-signout')?.addEventListener('click', doExtensionSignOut);
+  document.getElementById('btn-ext-signin-link')?.addEventListener('click', () => {
+    showAuthErr('');
+    updateAuthUI(null, 'auth_form');
+  });
+  document.getElementById('ext-auth-password')?.addEventListener('keyup', (e) => {
+    if (e.key === 'Enter') doExtensionSignIn();
+  });
 
   // ── Wire all static button events (MV3: no inline handlers) ────────────────
   document.getElementById('btn-scan-now')?.addEventListener('click', runManualScan);
@@ -47,17 +289,40 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (btn.dataset.action === 'rescan')         startRescan();
   });
 
-  // ── Backend check + tab detection ──────────────────────────────────────────
+  // ── Always check backend connectivity immediately on popup open ──────────
+  checkBackend();
+
+  // ── Auth Check on Popup Open ───────────────────────────────────────────────
+  const authenticated = await checkAuthOnStartup();
+  await initAfterAuth();
+});
+
+async function checkAuthOnStartup() {
+  const token = await getValidToken();
+  const data = await chrome.storage.local.get('userEmail');
+  if (token && data.userEmail) {
+    updateAuthUI(data.userEmail, 'authenticated');
+    return true;
+  } else {
+    updateAuthUI(null, 'anonymous');
+    return false;
+  }
+}
+
+async function initAfterAuth() {
   let tab = null;
   try {
-    [, tab] = await Promise.all([checkBackend(), getActiveTab()]);
+    tab = await getActiveTab();
   } catch (e) {
-    console.warn('SecureMail: init parallel tasks failed', e);
-    try { tab = await getActiveTab(); } catch { /* give up */ }
+    console.warn('SecureMail: getActiveTab failed', e);
   }
 
   _currentTab      = tab;
   _currentPlatform = getPlatform(tab?.url || '');
+
+  let stored = {};
+  try { stored = await chrome.storage.session.get('lastResult'); } catch { /* ignore */ }
+  if (stored.lastResult) renderResult(stored.lastResult);
 
   if (_currentPlatform) {
     // ── On a mail client ────────────────────────────────────────────────────
@@ -65,23 +330,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     showScanPanel('auto');
     showDetectingSpinner(true);
 
-    // Load any previous result silently into Result tab (user can view it via tab click)
-    // But NEVER short-circuit here — always detect what's currently open on screen
-    let stored = {};
-    try { stored = await chrome.storage.session.get('lastResult'); } catch { /* ignore */ }
-    if (stored.lastResult) renderResult(stored.lastResult);
-
-    // Always detect the currently open email — this is the source of truth
     await detectEmailOnPage(_currentTab, _currentPlatform, stored.lastResult ?? null);
 
   } else {
     // ── Not a mail client — show manual scan UI ─────────────────────────────
     showScanPanel('manual');
-    let stored = {};
-    try { stored = await chrome.storage.session.get('lastResult'); } catch { /* ignore */ }
-    if (stored.lastResult) renderResult(stored.lastResult);
   }
-});
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PHASE 1 — DETECT: extract email from page and show preview + scan button
@@ -351,7 +606,7 @@ function showEmailPreview(emailData, isSameEmail = false) {
   if (scanBtn) {
     scanBtn.innerHTML = isSameEmail
       ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Scan Again`
-      : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg> Scan This Email`;
+      : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Scan This Email`;
   }
 
   // Show or hide 'View Last Result' secondary button
@@ -431,33 +686,125 @@ async function checkBackend() {
 // ─────────────────────────────────────────────────────────────────────────────
 // SETTINGS
 // ─────────────────────────────────────────────────────────────────────────────
+// Fetch status of integrations from the backend
+async function loadIntegrationStatus() {
+  const vtBadge = document.getElementById('vt-api-badge');
+  const abuseBadge = document.getElementById('abuse-api-badge');
+  const aiBadge = document.getElementById('ai-api-badge');
+
+  try {
+    const r = await fetch(`${API_BASE}/settings/status`, { signal: AbortSignal.timeout(4000) });
+    if (r.ok) {
+      const status = await r.json();
+      
+      // Update VirusTotal badge
+      if (vtBadge) {
+        if (status.virustotal?.configured) {
+          vtBadge.className = 'api-badge active';
+          vtBadge.textContent = 'Active';
+        } else {
+          vtBadge.className = 'api-badge inactive';
+          vtBadge.textContent = 'Not Configured';
+        }
+      }
+
+      // Update AbuseIPDB badge
+      if (abuseBadge) {
+        if (status.abuseipdb?.configured) {
+          abuseBadge.className = 'api-badge active';
+          abuseBadge.textContent = 'Active';
+        } else {
+          abuseBadge.className = 'api-badge inactive';
+          abuseBadge.textContent = 'Not Configured';
+        }
+      }
+
+      // Update AI Explainer badge
+      if (aiBadge) {
+        let aiConfigured = false;
+        let aiName = 'AI Explainer';
+        if (status.gemini?.configured) {
+          aiConfigured = true;
+          aiName = 'Gemini API';
+        } else if (status.anthropic?.configured) {
+          aiConfigured = true;
+          aiName = 'Anthropic API';
+        }
+        
+        if (aiConfigured) {
+          aiBadge.className = 'api-badge active';
+          aiBadge.textContent = aiName;
+        } else {
+          aiBadge.className = 'api-badge inactive';
+          aiBadge.textContent = 'Not Configured';
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('Failed to load integration status from backend:', e);
+    [vtBadge, abuseBadge, aiBadge].forEach(b => {
+      if (b) {
+        b.className = 'api-badge inactive';
+        b.textContent = 'Offline';
+      }
+    });
+  }
+}
+
 async function loadSettings() {
-  const s = await chrome.storage.local.get(['backend', 'vt', 'abuse']);
+  const s = await chrome.storage.local.get(['backend', 'vt_enabled', 'abuse_enabled', 'ai_enabled']);
   if (s.backend) {
     API_BASE = s.backend + '/api';
     const el = document.getElementById('cfg-backend');
     if (el) el.value = s.backend;
   }
-  const vt = document.getElementById('cfg-vt');
-  const ab = document.getElementById('cfg-abuse');
-  if (s.vt    && vt) vt.value = s.vt;
-  if (s.abuse && ab) ab.value = s.abuse;
+  
+  _vtEnabled = s.vt_enabled !== false;
+  _abuseEnabled = s.abuse_enabled !== false;
+  _aiEnabled = s.ai_enabled !== false;
+
+  const vtPref = document.getElementById('pref-vt');
+  const abusePref = document.getElementById('pref-abuse');
+  const aiPref = document.getElementById('pref-ai');
+  if (vtPref) vtPref.checked = _vtEnabled;
+  if (abusePref) abusePref.checked = _abuseEnabled;
+  if (aiPref) aiPref.checked = _aiEnabled;
+
+  await loadIntegrationStatus();
 }
 
 async function saveSettings() {
   const backend = document.getElementById('cfg-backend').value.trim().replace(/\/$/, '');
-  const vt      = document.getElementById('cfg-vt').value.trim();
-  const abuse   = document.getElementById('cfg-abuse').value.trim();
+  const vtPref = document.getElementById('pref-vt');
+  const abusePref = document.getElementById('pref-abuse');
+  const aiPref = document.getElementById('pref-ai');
 
-  // Save backend URL locally so the popup remembers it across sessions.
-  // Note: API keys (VT / AbuseIPDB) are configured server-side in .env only
-  // — there is no key-upload endpoint on the backend by design.
-  await chrome.storage.local.set({ backend, vt, abuse });
+  _vtEnabled = vtPref ? vtPref.checked : true;
+  _abuseEnabled = abusePref ? abusePref.checked : true;
+  _aiEnabled = aiPref ? aiPref.checked : true;
+
+  await chrome.storage.local.set({ 
+    backend, 
+    vt_enabled: _vtEnabled, 
+    abuse_enabled: _abuseEnabled, 
+    ai_enabled: _aiEnabled 
+  });
   API_BASE = backend + '/api';
 
   const ok = await checkBackend();
-  showErr('settings-err', ok ? '' : 'Saved — but backend not reachable at this URL');
-  if (ok) switchTab('scan');
+  if (ok) {
+    await loadIntegrationStatus();
+    showErr('settings-err', '');
+    
+    // Re-render cached results if any exist to reflect changes instantly
+    let stored = {};
+    try { stored = await chrome.storage.session.get('lastResult'); } catch { /* ignore */ }
+    if (stored.lastResult) renderResult(stored.lastResult);
+
+    switchTab('scan');
+  } else {
+    showErr('settings-err', 'Saved preferences — but backend not reachable at this URL');
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -498,7 +845,7 @@ async function runDemo() {
   const btn = document.getElementById('btn-demo');
   if (btn) { btn.disabled = true; btn.textContent = 'Running…'; }
   try {
-    const r = await fetch(`${API_BASE}/scan/demo`, { signal: AbortSignal.timeout(60000) });
+    const r = await authFetch(`${API_BASE}/scan/demo`, { signal: AbortSignal.timeout(60000) });
     const d = await r.json();
     if (!r.ok) throw new Error(d.detail || 'Demo failed');
     await chrome.storage.session.set({ lastResult: d });
@@ -527,12 +874,20 @@ async function rescanCurrentEmail() {
 // ─────────────────────────────────────────────────────────────────────────────
 async function callScanEmail(raw) {
   autoStep('Sending to backend…');
-  const r = await fetch(`${API_BASE}/scan/email`, {
+  const r = await optionalAuthFetch(`${API_BASE}/scan/email`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ raw_email: raw }),
     signal: AbortSignal.timeout(60000),
   });
+
+  if (r.status === 429) {
+    const errData = await r.json().catch(() => ({}));
+    const detail = errData.detail || errData;
+    const msg = detail.message || "Daily free scan limit reached (5/5 scans used).";
+    showLimitAndPromptAuth(msg, detail.resets_at);
+    throw new Error('Daily limit reached. Please sign in to continue.');
+  }
+
   autoStep('Checking VirusTotal & AbuseIPDB…');
   const d = await r.json();
   if (!r.ok) throw new Error(d.detail || `HTTP ${r.status}`);
@@ -540,12 +895,20 @@ async function callScanEmail(raw) {
 }
 
 async function callScanUrl(url) {
-  const r = await fetch(`${API_BASE}/scan/url`, {
+  const r = await optionalAuthFetch(`${API_BASE}/scan/url`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ url }),
     signal: AbortSignal.timeout(30000),
   });
+
+  if (r.status === 429) {
+    const errData = await r.json().catch(() => ({}));
+    const detail = errData.detail || errData;
+    const msg = detail.message || "Daily free scan limit reached (5/5 scans used).";
+    showLimitAndPromptAuth(msg, detail.resets_at);
+    throw new Error('Daily limit reached. Please sign in to continue.');
+  }
+
   const d = await r.json();
   if (!r.ok) throw new Error(d.detail || `HTTP ${r.status}`);
   return { ...d, _type: 'url' };
@@ -554,6 +917,39 @@ async function callScanUrl(url) {
 // ─────────────────────────────────────────────────────────────────────────────
 // RESULT RENDERER
 // ─────────────────────────────────────────────────────────────────────────────
+function generateSummary(score, level, threats) {
+  if (level === 'clean') {
+    return 'No threats detected. Email appears legitimate.';
+  }
+  
+  const parts = [];
+  if (threats.includes('extortion')) {
+    parts.push('extortion / sextortion scam');
+  }
+  if (threats.includes('social_engineering') && !threats.includes('extortion')) {
+    parts.push('social engineering');
+  }
+  if (threats.includes('phishing')) {
+    parts.push('phishing attempt');
+  }
+  if (threats.includes('malicious_attachment')) {
+    parts.push('malicious attachment');
+  }
+  if (threats.includes('suspicious_url')) {
+    parts.push('malicious links');
+  }
+  if (threats.includes('spoofing')) {
+    parts.push('sender spoofing');
+  }
+  if (threats.includes('header_anomaly')) {
+    parts.push('header anomalies');
+  }
+  
+  const threatStr = parts.length ? parts.join(', ') : 'suspicious activity';
+  const levelStr = level.toUpperCase();
+  return `${levelStr} RISK (score ${score}/100) — ${threatStr} detected.`;
+}
+
 function renderResult(data) {
   const idle    = document.getElementById('result-idle');
   const content = document.getElementById('result-content');
@@ -568,33 +964,122 @@ function renderResult(data) {
   // ── URL result ────────────────────────────────────────────────────────────
   if (data._type === 'url') {
     const vt  = data.scan_result || {};
-    const lvl = vt.risk_level || 'unknown';
+    const lvl = _vtEnabled ? (vt.risk_level || 'unknown') : 'unknown';
+    const detections = _vtEnabled ? (vt.detections || 0) : 0;
+    const totalEngines = _vtEnabled ? (vt.total_engines || 0) : 0;
+    
     content.innerHTML = `
       <div class="result-card ${lvl}">
         <div class="risk-header">
-          <div class="risk-score ${lvl}">${vt.detections || 0}</div>
+          <div class="risk-score ${lvl}">${_vtEnabled ? detections : '—'}</div>
           <div>
             <div class="${badgeClass(lvl)}" style="margin-bottom:5px">${lvl.toUpperCase()}</div>
-            <div style="font-size:11px;color:#64748b">${vt.detections||0}/${vt.total_engines||0} engines flagged</div>
+            <div style="font-size:11px;color:#64748b">
+              ${_vtEnabled 
+                ? `${detections}/${totalEngines} engines flagged` 
+                : 'VirusTotal integration disabled'}
+            </div>
           </div>
         </div>
         <div class="summary">${esc(data.url || '')}</div>
-        ${vt.categories?.length ? `<div style="font-size:11px;color:#64748b;margin-top:6px">Categories: ${vt.categories.join(', ')}</div>` : ''}
+        ${_vtEnabled && vt.categories?.length ? `<div style="font-size:11px;color:#64748b;margin-top:6px">Categories: ${vt.categories.join(', ')}</div>` : ''}
       </div>
-      ${vt.permalink ? `<a href="${vt.permalink}" target="_blank" rel="noopener noreferrer" style="display:block;font-size:11px;color:#3b82f6;text-align:center;margin-top:6px">View on VirusTotal →</a>` : ''}
+      ${_vtEnabled && vt.permalink ? `<a href="${vt.permalink}" target="_blank" rel="noopener noreferrer" style="display:block;font-size:11px;color:#3b82f6;text-align:center;margin-top:6px">View on VirusTotal →</a>` : ''}
     `;
+    updateBadge(lvl);
     return;
   }
 
   // ── Full email result ─────────────────────────────────────────────────────
-  const lvl   = data.risk_level || 'unknown';
-  const score = data.risk_score ?? '?';
   const auth  = data.authentication || {};
   const h     = data.header_analysis || {};
   const urls  = data.urls || [];
   const atts  = data.attachments || [];
   const ph    = data.phishing || {};
   const meta  = data._emailMeta || {};
+  const ipRep = h.ip_reputation;
+
+  // ── Calculate adjusted score/level based on toggles ──
+  let adjustedScore = data.risk_score ?? 0;
+  let adjustedThreats = [...(data.threat_types || [])];
+  
+  // Calculate points to subtract if AbuseIPDB is disabled
+  let ipPoints = 0;
+  if (ipRep && !_abuseEnabled) {
+    const ipRisk = ipRep.risk_level || 'unknown';
+    const confidence = ipRep.abuse_confidence_score || 0;
+    if (ipRisk === 'high' || confidence >= 80) {
+      ipPoints += 20;
+    } else if (ipRisk === 'medium' || confidence >= 25) {
+      ipPoints += 12;
+    } else if (ipRisk === 'low' || confidence > 0) {
+      ipPoints += 5;
+    }
+    if (ipRep.is_tor) {
+      ipPoints += 8;
+    }
+    adjustedScore -= ipPoints;
+  }
+  
+  // Calculate points to subtract if VirusTotal is disabled
+  let vtUrlPoints = 0;
+  let vtAttPoints = 0;
+  if (!_vtEnabled) {
+    // URL scan points from VT
+    for (const url of urls) {
+      const vt = url.vt_result || {};
+      const detections = vt.detections || 0;
+      if (detections >= 10) {
+        vtUrlPoints = 20;
+        break; // capped at 20 max in risk_scorer.py
+      } else if (detections >= 3) {
+        vtUrlPoints = Math.max(vtUrlPoints, 12);
+      }
+    }
+    
+    // Attachment scan points from VT
+    for (const att of atts) {
+      const vt = att.vt_result || {};
+      const detections = vt.detections || 0;
+      if (detections >= 5) {
+        vtAttPoints = 25;
+        break; // capped at 25 max in risk_scorer.py
+      } else if (detections >= 1) {
+        vtAttPoints = Math.max(vtAttPoints, 15);
+      }
+    }
+    
+    adjustedScore -= (vtUrlPoints + vtAttPoints);
+    
+    // Filter threat types related to VT if no non-VT indicators remain
+    const hasDangerousExt = atts.some(a => a.is_dangerous_ext);
+    if (!hasDangerousExt) {
+      adjustedThreats = adjustedThreats.filter(t => t !== 'malicious_attachment');
+    }
+    const hasShortened = urls.some(u => u.is_shortened);
+    const hasLookalike = urls.some(u => u.is_lookalike);
+    const displaysLookalike = ph.domain_lookalike || ph.shortened_urls;
+    if (!hasShortened && !hasLookalike && !displaysLookalike) {
+      adjustedThreats = adjustedThreats.filter(t => t !== 'suspicious_url');
+    }
+  }
+  
+  adjustedScore = Math.max(0, adjustedScore);
+  
+  // Map adjusted score back to a risk level
+  let adjustedLvl = 'clean';
+  if (adjustedScore > 0 || (adjustedThreats.length > 0 && !adjustedThreats.includes('clean'))) {
+    if (adjustedScore >= 80) adjustedLvl = 'critical';
+    else if (adjustedScore >= 70) adjustedLvl = 'high';
+    else if (adjustedScore >= 40) adjustedLvl = 'medium';
+    else if (adjustedScore > 10) adjustedLvl = 'low';
+  }
+  if (adjustedScore === 0 && adjustedThreats.length === 0) {
+    adjustedThreats.push('clean');
+  }
+  
+  // Generate dynamic summary
+  const dynamicSummary = generateSummary(adjustedScore, adjustedLvl, adjustedThreats);
 
   const findings = [];
   if (auth.spf   === 'fail') findings.push({ dot: 'fd-red',    txt: 'SPF authentication failed' });
@@ -607,12 +1092,24 @@ function renderResult(data) {
   if (ph.domain_lookalike)   findings.push({ dot: 'fd-orange', txt: 'Brand lookalike domain in links' });
   if (ph.shortened_urls)     findings.push({ dot: 'fd-amber',  txt: 'URL shortener hiding destination' });
 
-  const malUrl = urls.find(u => u.vt_result?.detections > 0);
-  if (malUrl) findings.push({ dot: 'fd-red', txt: `Malicious URL: ${esc(malUrl.domain)}` });
-  const malAtt = atts.find(a => a.vt_result?.detections > 0);
-  if (malAtt) findings.push({ dot: 'fd-red', txt: `Malicious file: ${esc(malAtt.filename)}` });
+  // Only show VirusTotal findings if VT is enabled
+  if (_vtEnabled) {
+    const malUrl = urls.find(u => u.vt_result?.detections > 0);
+    if (malUrl) findings.push({ dot: 'fd-red', txt: `Malicious URL: ${esc(malUrl.domain)}` });
+    const malAtt = atts.find(a => a.vt_result?.detections > 0);
+    if (malAtt) findings.push({ dot: 'fd-red', txt: `Malicious file: ${esc(malAtt.filename)}` });
+  }
 
-  if (!findings.length && lvl === 'clean') {
+  // Only show IP reputation finding if AbuseIPDB is enabled
+  if (_abuseEnabled && ipRep) {
+    const ipRisk = ipRep.risk_level || 'unknown';
+    const confidence = ipRep.abuse_confidence_score || 0;
+    if (ipRisk === 'high' || confidence >= 50) {
+      findings.push({ dot: 'fd-red', txt: `Suspicious sender IP reputation: ${esc(ipRep.ip)} (${confidence}% abuse confidence)` });
+    }
+  }
+
+  if (!findings.length && adjustedLvl === 'clean') {
     findings.push({ dot: 'fd-green', txt: 'No threats detected' });
     findings.push({ dot: 'fd-green', txt: 'SPF / DKIM / DMARC all passed' });
   }
@@ -620,7 +1117,38 @@ function renderResult(data) {
   // Sender line for the meta strip
   const senderLine = data.sender_email || meta.sender || h.from_email || '';
   const subjectLine = data.subject || meta.subject || '';
-  const skipped = data.urls_skipped > 0 ? `<span style="color:#f59e0b;font-size:10.5px">${data.urls_skipped} URL${data.urls_skipped > 1 ? 's' : ''} not scanned (rate limit)</span>` : '';
+  const skipped = _vtEnabled && data.urls_skipped > 0 ? `<span style="color:#f59e0b;font-size:10.5px">${data.urls_skipped} URL${data.urls_skipped > 1 ? 's' : ''} not scanned (rate limit)</span>` : '';
+
+  _currentScanData = data;
+
+  const showAiBlock = _aiEnabled && adjustedLvl !== 'clean';
+  const aiBlockHtml = showAiBlock ? `
+    <div class="ai-explainer" id="ext-ai-explainer-block" style="margin-top:12px">
+      <div class="ai-explainer-header" id="ext-ai-header">
+        <div class="ai-header-left">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2.5"><path d="M9.663 17h4.673M12 3v1m6.364 1.636-.707.707M21 12h-1M4 12H3m3.343-5.657-.707-.707m2.828 9.9a5 5 0 1 1 7.072 0l-.548.547A3.374 3.374 0 0 0 14 18.469V19a2 2 0 1 1-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+          <span class="ai-title">AI Threat Explainer</span>
+        </div>
+        <svg id="ext-ai-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--t3);transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+      <div id="ext-ai-content" style="display:none">
+        <div class="ai-body">
+          <div class="ai-thinking" id="ext-ai-idle">
+            <div class="ai-dots"><span></span><span></span><span></span></div>
+            <span style="font-size:11px;color:var(--t3);margin-bottom:6px;display:block">AI will explain this threat in plain English</span>
+            <button class="ai-btn" id="ext-ai-explain-btn">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              Explain this threat
+            </button>
+          </div>
+          <div id="ext-ai-streaming" style="display:none" class="ai-body-content"></div>
+          <div class="ai-footer" id="ext-ai-footer" style="display:none; border-top:1px solid rgba(167,139,250,0.08); padding-top:6px; margin-top:8px">
+            Model: <span id="ext-ai-model-name">detecting…</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  ` : '';
 
   content.innerHTML = `
     ${senderLine || subjectLine ? `
@@ -632,15 +1160,15 @@ function renderResult(data) {
       <span>${senderLine ? `<strong>${esc(senderLine)}</strong>` : ''}${subjectLine ? ` · ${esc(subjectLine)}` : ''}</span>
     </div>` : ''}
 
-    <div class="result-card ${lvl}">
+    <div class="result-card ${adjustedLvl}">
       <div class="risk-header">
-        <div class="risk-score ${lvl}">${score}</div>
+        <div class="risk-score ${adjustedLvl}">${adjustedScore}</div>
         <div>
-          <div class="${badgeClass(lvl)}" style="margin-bottom:4px">${lvl.toUpperCase()}</div>
-          <div style="font-size:10.5px;color:#64748b">${(data.threat_types||[]).filter(t=>t!=='clean').join(', ')||'No threats'}</div>
+          <div class="${badgeClass(adjustedLvl)}" style="margin-bottom:4px">${adjustedLvl.toUpperCase()}</div>
+          <div style="font-size:10.5px;color:#64748b">${adjustedThreats.filter(t=>t!=='clean').join(', ')||'No threats'}</div>
         </div>
       </div>
-      <div class="summary">${esc(data.summary || '')}</div>
+      <div class="summary">${esc(dynamicSummary)}</div>
     </div>
 
     <div class="auth-grid">
@@ -663,9 +1191,11 @@ function renderResult(data) {
 
     ${skipped}
 
+    ${aiBlockHtml}
+
     <div class="btn-row" style="margin-top:10px">
       <button class="btn btn-secondary btn-sm" data-action="open-dashboard" style="flex:1">Full Report</button>
-      ${lvl !== 'clean' ? `<button class="btn btn-secondary btn-sm" data-action="save-log" style="flex:1">Save Log</button>` : ''}
+      ${adjustedLvl !== 'clean' ? `<button class="btn btn-secondary btn-sm" data-action="save-log" style="flex:1">Save Log</button>` : ''}
     </div>
     <button class="btn-rescan" data-action="rescan">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -674,6 +1204,18 @@ function renderResult(data) {
       Scan Again
     </button>
   `;
+
+  // Bind dynamic DOM element listeners
+  const extAiHeader = document.getElementById('ext-ai-header');
+  const extAiExplainBtn = document.getElementById('ext-ai-explain-btn');
+  if (extAiHeader) {
+    extAiHeader.addEventListener('click', toggleExtAiPanel);
+  }
+  if (extAiExplainBtn) {
+    extAiExplainBtn.addEventListener('click', runExtAiExplain);
+  }
+
+  updateBadge(adjustedLvl);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -750,9 +1292,8 @@ async function saveToDashboard() {
   const stored = await chrome.storage.session.get('lastResult');
   if (!stored.lastResult) return;
   try {
-    const r = await fetch(`${API_BASE}/forensics/save`, {
+    const r = await authFetch(`${API_BASE}/forensics/save`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(stored.lastResult),
       signal: AbortSignal.timeout(5000),
     });
@@ -784,4 +1325,159 @@ function initExtTheme() {
   }
   const btn = document.getElementById('btn-ext-theme');
   if (btn) btn.innerHTML = isLight ? SUN_SVG : MOON_SVG;
+}
+
+// ── Extension AI Explainer ──────────────────
+function toggleExtAiPanel() {
+  const content = document.getElementById('ext-ai-content');
+  const chevron = document.getElementById('ext-ai-chevron');
+  if (!content) return;
+  const open = content.style.display === 'none';
+  content.style.display = open ? 'block' : 'none';
+  if (chevron) chevron.style.transform = open ? 'rotate(180deg)' : '';
+  
+  if (open) {
+    updateExtModelName();
+  }
+}
+
+async function updateExtModelName() {
+  const modelSpan = document.getElementById('ext-ai-model-name');
+  const footer = document.getElementById('ext-ai-footer');
+  if (!modelSpan || !footer) return;
+  
+  try {
+    const r = await fetch(`${API_BASE}/ai/status`, { signal: AbortSignal.timeout(4000) });
+    if (r.ok) {
+      const d = await r.json();
+      if (d.model) {
+        modelSpan.textContent = d.model;
+        footer.style.display = 'block';
+      }
+    }
+  } catch (e) {
+    console.warn('Failed to load AI model status', e);
+  }
+}
+
+async function runExtAiExplain() {
+  const d = _currentScanData;
+  if (!d) return;
+
+  const idle = document.getElementById('ext-ai-idle');
+  const streaming = document.getElementById('ext-ai-streaming');
+  const btn = document.getElementById('ext-ai-explain-btn');
+
+  if (idle) idle.style.display = 'none';
+  if (streaming) {
+    streaming.style.display = 'block';
+    streaming.innerHTML = `<div class="ai-thinking"><div class="ai-dots"><span></span><span></span><span></span></div> AI is analysing the threat…</div>`;
+  }
+  if (btn) btn.disabled = true;
+
+  try {
+    const response = await fetch(`${API_BASE}/ai/explain`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        risk_score: d.risk_score,
+        risk_level: d.risk_level,
+        threat_types: d.threat_types || [],
+        summary: d.summary || '',
+        sender_email: d.sender_email,
+        subject: d.subject,
+        phishing: d.phishing || {},
+        authentication: d.authentication || {},
+        header_analysis: d.header_analysis || {},
+        urls: d.urls || [],
+        attachments: d.attachments || [],
+      }),
+      signal: AbortSignal.timeout(60000),
+    });
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${response.status}`);
+    }
+
+    if (streaming) streaming.innerHTML = '';
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let fullText = '';
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const dataStr = line.slice(6).trim();
+        if (dataStr === '[DONE]') break;
+        try {
+          const evt = JSON.parse(dataStr);
+          if (evt.type === 'content_block_delta' && evt.delta?.type === 'text_delta') {
+            fullText += evt.delta.text;
+            if (streaming) {
+              streaming.innerHTML = formatAiText(fullText) + '<span class="ai-cursor"></span>';
+            }
+          }
+        } catch {}
+      }
+    }
+
+    if (streaming) streaming.innerHTML = formatAiText(fullText);
+    updateExtModelName();
+
+  } catch (e) {
+    if (streaming) {
+      streaming.innerHTML = `<div style="padding:10px 12px;color:#ef4444;font-size:11.5px;line-height:1.5">
+        <strong>Could not reach AI Explainer API.</strong><br>
+        ${e.message.includes('401') ? 'API key invalid or missing.' :
+          e.message.includes('429') ? 'Rate limit hit — try again.' :
+          e.message.includes('Failed to fetch') ? 'Network error — backend offline.' :
+          esc(e.message)}
+      </div>`;
+    }
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+function formatAiText(text) {
+  let html = '';
+  const sections = text.split(/\n\n(?=\*\*)/);
+  for (const section of sections) {
+    if (!section.trim()) continue;
+    const headerMatch = section.match(/^\*\*(.+?)\*\*\n?([\s\S]*)/);
+    if (headerMatch) {
+      const title = headerMatch[1].trim();
+      const body  = headerMatch[2].trim();
+      const formattedBody = body
+        .split('\n')
+        .map(line => {
+          line = line.trim();
+          if (!line) return '';
+          if (line.startsWith('- ') || line.startsWith('• ') || line.match(/^\d+\./)) {
+            const txt = line.replace(/^[-•]\s*/, '').replace(/^\d+\.\s*/, '');
+            return `<div style="display:flex;gap:5px;margin-bottom:4px"><span style="color:#a78bfa;margin-top:1px">›</span><span>${boldify(txt)}</span></div>`;
+          }
+          return `<p style="margin:0 0 4px">${boldify(line)}</p>`;
+        })
+        .filter(Boolean)
+        .join('');
+      html += `<div class="ai-section"><div class="ai-section-title">${esc(title)}</div><div class="ai-section-body">${formattedBody}</div></div>`;
+    } else {
+      const lines = section.split('\n').map(l => l.trim()).filter(Boolean);
+      html += lines.map(l => `<p style="margin:0 0 6px;font-size:11px;color:var(--t2);line-height:1.6">${boldify(l)}</p>`).join('');
+    }
+  }
+  return html || `<p style="font-size:11px;color:var(--t2);line-height:1.6">${boldify(text)}</p>`;
+}
+
+function boldify(text) {
+  return esc(text).replace(/\*\*(.+?)\*\*/g, '<strong style="color:var(--t1)">$1</strong>');
 }

@@ -223,6 +223,33 @@ CORS is enabled for all origins in development. Lock it down in production via t
 
 ---
 
+## Account Maintenance & 7-Day Purge
+
+To purge expired accounts (scheduled for soft deletion > 7 days ago), schedule the cleanup script via cron:
+
+```bash
+# Run daily at 3:00 AM
+0 3 * * * cd /path/to/Backend && python -m app.scripts.purge_deleted_accounts
+```
+
+Purged accounts are permanently deleted from Firebase Auth, Firestore, and on-disk forensic logs, and logged to `Backend/purge_audit.log`.
+
+---
+
+## Weekly Digest Email Batch
+
+To dispatch 7-day threat summary emails to active users, schedule the weekly digest script via cron:
+
+```bash
+# Run weekly on Mondays at 9:00 AM
+0 9 * * 1 cd /path/to/Backend && python -m app.scripts.send_weekly_digests
+```
+
+Emails are sent via the Resend API (`RESEND_API_KEY` in `.env`) to users with scan activity in the last 7 days who have not opted out.
+
+
+---
+
 ## Free Tier API Limits
 
 | Service | Free limit | Notes |

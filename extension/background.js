@@ -104,11 +104,101 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
 });
 
+// ── Web App Session Sync Listener ───────────────────────────────────────────
+chrome.runtime.onMessageExternal.addListener((msg, sender, sendResponse) => {
+  const allowedOrigins = ['http://localhost:8000', 'http://127.0.0.1:8000'];
+  if (sender.origin && !allowedOrigins.some(o => sender.origin.startsWith(o))) {
+    console.warn('SecureMail background: rejected external message from untrusted origin', sender.origin);
+    sendResponse({ success: false, error: 'Unauthorized origin' });
+    return;
+  }
+
+  if (msg.type === 'SECUREMAIL_AUTH_SYNC' && msg.idToken) {
+    chrome.storage.local.set({
+      authToken: msg.idToken,
+      tokenExpiry: msg.expiresAt || (Date.now() + 3600 * 1000),
+      userEmail: msg.userEmail || ''
+    }).then(() => {
+      console.log('SecureMail background: synced auth session from Web App');
+      sendResponse({ success: true });
+    }).catch(err => {
+      sendResponse({ success: false, error: err.message });
+    });
+    return true;
+  }
+});
+
+async function getFirebaseKey() {
+  const data = await chrome.storage.local.get(['firebaseApiKey', 'apiBaseUrl']);
+  if (data.firebaseApiKey) return data.firebaseApiKey;
+  const baseUrl = data.apiBaseUrl || 'http://localhost:8000/api';
+  try {
+    const resp = await fetch(`${baseUrl}/auth/config`);
+    if (resp.ok) {
+      const cfg = await resp.json();
+      if (cfg.apiKey) {
+        await chrome.storage.local.set({ firebaseApiKey: cfg.apiKey });
+        return cfg.apiKey;
+      }
+    }
+  } catch (e) {}
+  return '';
+}
+
+async function getValidToken() {
+  const data = await chrome.storage.local.get(['authToken', 'refreshToken', 'tokenExpiry']);
+  if (!data.authToken) return null;
+  const now = Date.now();
+  if (data.tokenExpiry && (data.tokenExpiry - now) > 300000) {
+    return data.authToken;
+  }
+  if (!data.refreshToken) {
+    await chrome.storage.local.remove(['authToken', 'refreshToken', 'tokenExpiry', 'userEmail']);
+    return null;
+  }
+  try {
+    const apiKey = await getFirebaseKey();
+    if (!apiKey) return null;
+    const resp = await fetch(`https://securetoken.googleapis.com/v1/token?key=${apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'refresh_token',
+        refresh_token: data.refreshToken
+      })
+    });
+    if (!resp.ok) {
+      await chrome.storage.local.remove(['authToken', 'refreshToken', 'tokenExpiry', 'userEmail']);
+      return null;
+    }
+    const json = await resp.json();
+    const newToken = json.id_token;
+    const newRefresh = json.refresh_token || data.refreshToken;
+    const expiresIn = parseInt(json.expires_in || '3600', 10);
+    const newExpiry = Date.now() + (expiresIn * 1000);
+
+    await chrome.storage.local.set({
+      authToken: newToken,
+      refreshToken: newRefresh,
+      tokenExpiry: newExpiry
+    });
+    return newToken;
+  } catch (e) {
+    console.warn('SecureMail background: token refresh failed', e);
+    await chrome.storage.local.remove(['authToken', 'refreshToken', 'tokenExpiry', 'userEmail']);
+    return null;
+  }
+}
+
 // ── Core scan functions ───────────────────────────────────────────────────────
 async function scanEmail(api, text) {
+  const token = await getValidToken();
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
   const r = await fetch(`${api}/scan/email`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify({ raw_email: text }),
     signal: AbortSignal.timeout(45000),
   });
@@ -118,9 +208,13 @@ async function scanEmail(api, text) {
 }
 
 async function scanUrl(api, url) {
+  const token = await getValidToken();
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
   const r = await fetch(`${api}/scan/url`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify({ url }),
     signal: AbortSignal.timeout(30000),
   });

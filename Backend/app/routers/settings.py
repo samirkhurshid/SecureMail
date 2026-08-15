@@ -7,15 +7,19 @@ NOTE: POST /api/settings/keys is intentionally REMOVED.
 """
 
 import time
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from app.config import get_settings
 from app.utils.logger import setup_logger
+from app.services.simple_rate_limiter import rate_limit
 
 logger = setup_logger(__name__)
 router = APIRouter()
 
+# 10 requests per minute rate limit on sensitive settings endpoints
+_rate_limiter = Depends(rate_limit(max_requests=10, window_seconds=60))
 
-@router.get("/status", summary="Integration status — keys always masked")
+
+@router.get("/status", summary="Integration status — keys always masked", dependencies=[_rate_limiter])
 async def get_status():
     """
     Returns which API integrations are configured.
@@ -37,13 +41,17 @@ async def get_status():
             "configured": bool(s.ANTHROPIC_API_KEY),
             "key_preview": s.mask_key(s.ANTHROPIC_API_KEY),
         },
+        "gemini": {
+            "configured": bool(s.GEMINI_API_KEY),
+            "key_preview": s.mask_key(s.GEMINI_API_KEY),
+        },
         "forensics_dir": s.FORENSICS_LOG_DIR,
         "max_attachment_mb": s.MAX_ATTACHMENT_SIZE_MB,
         "_note": "API keys are managed via server .env file only"
     }
 
 
-@router.get("/test", summary="Live connection test — pings all 3 APIs")
+@router.get("/test", summary="Live connection test — pings all 3 APIs", dependencies=[_rate_limiter])
 async def test_connections():
     """
     Makes real HTTP calls to VirusTotal, AbuseIPDB and Anthropic.
@@ -156,7 +164,7 @@ async def test_connections():
                         "content-type": "application/json",
                     },
                     json={
-                        "model": "claude-haiku-4-5-20251001",
+                        "model": "claude-3-5-haiku-20241022",
                         "max_tokens": 10,
                         "messages": [{"role": "user", "content": "ping"}],
                     },
@@ -169,7 +177,7 @@ async def test_connections():
                     "response_time_ms": ms,
                     "message": "✓ Connected to Anthropic API",
                     "proof": {
-                        "model": "claude-sonnet-4-6 (for explanations)",
+                        "model": "claude-3-5-sonnet-20241022 (for explanations)",
                         "key_preview": s.mask_key(s.ANTHROPIC_API_KEY),
                     }
                 }

@@ -2,6 +2,15 @@
 .env
 *.env
 !.env.example
+firebase-service-account.json
+*firebase-adminsdk*.json
+usage_tracking.db
+*.db
+*.sqlite*
+user_records.json
+Backend/user_records.json
+Backend/usage_tracking.db
+
 
 # ── Python ────────────────────────────────────────────────────────
 __pycache__/

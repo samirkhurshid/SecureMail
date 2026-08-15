@@ -1,24 +1,34 @@
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional
 
 class EmailScanRequest(BaseModel):
-    raw_email: Optional[str] = None
-    headers_raw: Optional[str] = None
-    sender_email: Optional[str] = None
-    subject: Optional[str] = None
+    raw_email: Optional[str] = Field(default=None, max_length=500_000)
+    headers_raw: Optional[str] = Field(default=None, max_length=500_000)
+    sender_email: Optional[str] = Field(default=None, max_length=500)
+    subject: Optional[str] = Field(default=None, max_length=2000)
+
+    @field_validator('raw_email', 'headers_raw')
+    @classmethod
+    def validate_email_length(cls, v: Optional[str]) -> Optional[str]:
+        if v and len(v) > 500_000:
+            raise ValueError('Email content exceeds maximum allowed size (500,000 characters).')
+        return v
 
 class URLScanRequest(BaseModel):
-    url: str
+    url: str = Field(..., max_length=2048)
 
     @field_validator('url')
     @classmethod
     def validate_url(cls, v: str) -> str:
         if not v or not v.strip():
             raise ValueError('URL cannot be empty or whitespace')
-        return v.strip()
+        v = v.strip()
+        if len(v) > 2048:
+            raise ValueError('URL exceeds maximum allowed length of 2048 characters')
+        return v
 
 class IPCheckRequest(BaseModel):
-    ip: str
+    ip: str = Field(..., max_length=100)
 
     @field_validator('ip')
     @classmethod
@@ -26,3 +36,13 @@ class IPCheckRequest(BaseModel):
         if not v or not v.strip():
             raise ValueError('IP cannot be empty or whitespace')
         return v.strip()
+
+
+class PreferencesUpdateRequest(BaseModel):
+    digest_enabled: bool
+
+
+class WebhookUpdateRequest(BaseModel):
+    webhook_url: Optional[str] = None
+
+

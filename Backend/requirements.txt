@@ -22,3 +22,17 @@ pytest-asyncio>=0.23.0
 # Dev / optional
 python-multipart>=0.0.9   # for file upload endpoints
 python-dotenv>=1.0.0      # configuration loading
+
+# Authentication & Encryption
+firebase-admin>=6.5.0
+cryptography>=42.0.0
+
+# Computer Vision & Quishing Analysis
+opencv-python-headless>=4.10.0
+pillow>=10.0.0
+numpy>=1.26.0
+qrcode>=8.0.0
+
+
+
+

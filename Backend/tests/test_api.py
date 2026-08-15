@@ -8,8 +8,23 @@ import json
 from fastapi.testclient import TestClient
 from app.main import app
 from app.services import email_parser, risk_scorer
+from app.auth import get_current_user, get_optional_user, CurrentUser
+
+
+def _mock_get_current_user():
+    return CurrentUser(
+        uid="test_user_123",
+        email="testuser@example.com",
+        email_verified=True,
+        name="Test User"
+    )
+
+
+app.dependency_overrides[get_current_user] = _mock_get_current_user
+app.dependency_overrides[get_optional_user] = _mock_get_current_user
 
 client = TestClient(app)
+
 
 # ── Sample data ───────────────────────────────────────────────────
 
@@ -52,7 +67,11 @@ Authentication-Results: mx.example.com; spf=fail; dkim=none; dmarc=fail
 def test_root():
     resp = client.get("/")
     assert resp.status_code == 200
-    assert resp.json()["status"] == "online"
+    content_type = resp.headers.get("content-type", "")
+    if "text/html" in content_type:
+        assert "<!DOCTYPE html>" in resp.text
+    else:
+        assert resp.json()["status"] == "online"
 
 
 def test_health():
@@ -112,15 +131,17 @@ def test_risk_score_high_for_phishing():
     phishing = {
         "urgency_language": True, "credential_request": True,
         "domain_lookalike": True, "display_name_spoof": True,
-        "reply_to_mismatch": True, "subject_suspicious": False,
-        "shortened_urls": False,
+        "reply_to_mismatch": True, "subject_suspicious": True,
+        "shortened_urls": False, "keyword_score": 35,
+        "domain_impersonation": True,
     }
     score, level, threats = risk_scorer.compute_email_risk_score(
-        auth=auth, phishing=phishing, urls=[], attachments=[], ip_reputation=None, headers={}
+        auth=auth, phishing=phishing, urls=[], attachments=[], ip_reputation=None, headers={"from_domain": "paypa1-support.ru"}
     )
     assert score >= 70
     assert level in ("high", "critical")
     assert "phishing" in threats
+
 
 
 def test_risk_score_clean():

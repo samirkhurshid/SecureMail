@@ -1,9 +1,10 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from fastapi.responses import StreamingResponse
 import io
 import csv
 import json
 from app.services import forensics as forensics_service
+from app.auth import get_current_user, CurrentUser
 
 router = APIRouter()
 
@@ -12,9 +13,10 @@ async def list_logs(
     limit: int = Query(50, ge=1),
     offset: int = Query(0, ge=0),
     risk_level: str = Query(None),
-    search: str = Query(None)
+    search: str = Query(None),
+    user: CurrentUser = Depends(get_current_user)
 ):
-    logs = forensics_service.get_all_logs()
+    logs = forensics_service.get_all_logs(user_id=user.uid)
     
     # Filter by risk_level
     if risk_level:
@@ -36,12 +38,12 @@ async def list_logs(
     return {"total": total, "logs": paginated_logs}
 
 @router.get("/stats")
-async def get_stats():
-    return forensics_service.get_stats()
+async def get_stats(user: CurrentUser = Depends(get_current_user)):
+    return forensics_service.get_stats(user_id=user.uid)
 
 @router.get("/export/json")
-async def export_json():
-    logs = forensics_service.get_all_logs()
+async def export_json(user: CurrentUser = Depends(get_current_user)):
+    logs = forensics_service.get_all_logs(user_id=user.uid)
     data = json.dumps(logs, indent=2)
     return StreamingResponse(
         io.BytesIO(data.encode("utf-8")),
@@ -50,8 +52,8 @@ async def export_json():
     )
 
 @router.get("/export/csv")
-async def export_csv():
-    logs = forensics_service.get_all_logs()
+async def export_csv(user: CurrentUser = Depends(get_current_user)):
+    logs = forensics_service.get_all_logs(user_id=user.uid)
     output = io.StringIO()
     writer = csv.writer(output)
     
@@ -77,28 +79,29 @@ async def export_csv():
     )
 
 @router.get("/{log_id}")
-async def get_log(log_id: str):
-    log = forensics_service.get_log_by_id(log_id)
+async def get_log(log_id: str, user: CurrentUser = Depends(get_current_user)):
+    log = forensics_service.get_log_by_id(log_id, user_id=user.uid)
     if not log:
         raise HTTPException(status_code=404, detail="Log not found")
     return log
 
 @router.delete("/{log_id}")
-async def delete_log(log_id: str):
-    success = forensics_service.delete_log_by_id(log_id)
+async def delete_log(log_id: str, user: CurrentUser = Depends(get_current_user)):
+    success = forensics_service.delete_log_by_id(log_id, user_id=user.uid)
     if not success:
         raise HTTPException(status_code=404, detail="Log not found")
     return {"status": "success", "message": f"Log {log_id} deleted"}
 
 
 @router.post("/save")
-async def save_log(result: dict):
+async def save_log(result: dict, user: CurrentUser = Depends(get_current_user)):
     """
     Manually save a scan result as a forensic log.
     Called by the browser extension popup Save button.
     """
     if not result:
-        from fastapi import HTTPException
         raise HTTPException(status_code=400, detail="No scan result provided")
-    log_id = forensics_service.save_forensic_log(result)
+    result["user_id"] = user.uid
+    log_id = forensics_service.save_forensic_log(result, user_id=user.uid)
     return {"status": "saved", "log_id": log_id}
+

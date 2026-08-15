@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, HTTPException, Request
 from pydantic import BaseModel, field_validator
 from app.services import virustotal
 from app.config import get_settings
@@ -21,7 +21,19 @@ class HashCheckRequest(BaseModel):
         return v
 
 @router.post("/scan")
-async def scan_attachment(file: UploadFile = File(...)):
+async def scan_attachment(request: Request, file: UploadFile = File(...)):
+    max_bytes = settings.MAX_ATTACHMENT_SIZE_MB * 1024 * 1024
+    content_length = request.headers.get("content-length")
+    if content_length:
+        try:
+            if int(content_length) > max_bytes:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"File too large. Max allowed size is {settings.MAX_ATTACHMENT_SIZE_MB}MB"
+                )
+        except ValueError:
+            pass
+
     # Read file
     content = await file.read()
     

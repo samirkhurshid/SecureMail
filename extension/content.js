@@ -11,6 +11,18 @@ let _scanDebounce   = null;
   interceptLinks();
 })();
 
+// ── Web App Session Sync Listener ─────────────────────────────────────────────
+window.addEventListener('message', (event) => {
+  if (event.source !== window) return;
+  if (event.data && event.data.type === 'SECUREMAIL_AUTH_SYNC' && event.data.idToken) {
+    chrome.storage.local.set({
+      authToken: event.data.idToken,
+      tokenExpiry: event.data.expiresAt || (Date.now() + 3600 * 1000),
+      userEmail: event.data.userEmail || ''
+    });
+  }
+});
+
 function detectPlatform() {
   const host = location.hostname;
   if (host.includes('mail.google.com'))        return 'gmail';
@@ -111,10 +123,7 @@ function showInlineResult(result, anchorEl) {
       background:${c.bg};border:1px solid ${c.border};border-radius:10px;
       font-family:-apple-system,'Inter',sans-serif;font-size:13px;
     ">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
-           stroke="${c.text}" stroke-width="2.5" style="flex-shrink:0;margin-top:1px">
-        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-      </svg>
+      <img src="${chrome.runtime.getURL('icons/icon32.png')}" alt="SecureMail" style="width:22px;height:22px;object-fit:contain;border-radius:4px;flex-shrink:0;margin-top:1px;box-shadow:0 2px 8px rgba(0,0,0,0.15)">
       <div style="flex:1;min-width:0">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">
           <strong style="color:${c.text};font-size:13.5px">
