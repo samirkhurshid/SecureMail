@@ -10,7 +10,7 @@ import time
 import asyncio
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends, Request
 from app.models.schemas import EmailScanRequest, URLScanRequest, IPCheckRequest
-from app.services import virustotal, abuseipdb, email_parser, risk_scorer, usage_tracker, qr_scanner
+from app.services import virustotal, abuseipdb, email_parser, risk_scorer, usage_tracker, qr_scanner, homograph_service, ml_classifier
 from app.services.forensics import save_forensic_log
 from app.services.simple_rate_limiter import get_client_ip
 from app.services.anonymous_quota import check_and_increment_anon_quota, get_anon_quota, get_next_reset_time_ist
@@ -261,6 +261,64 @@ async def scan_email(
         weighted_phishing=weighted_phishing,
     )
 
+    # ── Step 5.6: IDN Homograph & Typosquatting Analysis ────────
+    homograph_alerts = []
+    from_dom = headers.get("from_domain", "")
+    if from_dom:
+        from_verdict = homograph_service.evaluate_domain_homograph(from_dom)
+        if from_verdict.get("is_lookalike"):
+            homograph_alerts.append({
+                "target": "sender_domain",
+                "domain": from_verdict["domain"],
+                "unicode_domain": from_verdict.get("unicode_domain"),
+                "spoofed_brand": from_verdict.get("spoofed_brand"),
+                "official_domain": from_verdict.get("official_domain"),
+                "attack_vectors": from_verdict.get("attack_vectors", []),
+                "threat_indicators": from_verdict.get("threat_indicators", [])
+            })
+            score = max(score, from_verdict.get("risk_score", 85))
+
+    for u in url_results:
+        ha = u.get("homograph_analysis") or {}
+        if ha.get("is_lookalike"):
+            homograph_alerts.append({
+                "target": "url",
+                "url": u.get("url"),
+                "domain": ha.get("domain"),
+                "unicode_domain": ha.get("unicode_domain"),
+                "spoofed_brand": ha.get("spoofed_brand"),
+                "official_domain": ha.get("official_domain"),
+                "attack_vectors": ha.get("attack_vectors", []),
+                "threat_indicators": ha.get("threat_indicators", [])
+            })
+            score = max(score, ha.get("risk_score", 80))
+
+    if homograph_alerts:
+        if "homograph_impersonation" not in threat_types:
+            threat_types.append("homograph_impersonation")
+        if score >= 80:
+            risk_level = "critical"
+        elif score >= 55:
+            risk_level = "high"
+
+    # ── Step 5.7: Local ML Phishing Classifier Inference (< 5ms) ───
+    ml_prediction = ml_classifier.predict_phishing_probability(
+        parsed,
+        extra_heuristics={
+            "quishing": quishing_result,
+            "hop_audit": hop_audit,
+        }
+    )
+    if ml_prediction.get("is_phishing") and ml_prediction.get("probability", 0) >= 0.70:
+        if "ml_phishing_classifier" not in threat_types:
+            threat_types.append("ml_phishing_classifier")
+        if ml_prediction.get("probability", 0) >= 0.85:
+            score = max(score, int(ml_prediction["percentage"]))
+            if score >= 80:
+                risk_level = "critical"
+            elif score >= 55:
+                risk_level = "high"
+
     # Incorporate Quishing risk score & threat classification
     if quishing_result.get("has_qr_codes") and quishing_result.get("risk_score", 0) >= 35:
         score = max(score, quishing_result["risk_score"])
@@ -306,6 +364,8 @@ async def scan_email(
         "received_hop_audit": hop_audit,
         "weighted_phishing_analysis": weighted_phishing,
         "quishing": quishing_result,
+        "homograph_alerts": homograph_alerts,
+        "ml_prediction": ml_prediction,
     }
 
     # ── Step 7: Auto-save forensic log & record scan usage for real scans ────────────

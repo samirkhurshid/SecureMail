@@ -1,14 +1,14 @@
 # 🛡️ SecureMail — Email Threat Intelligence Gateway & Forensics Dashboard
 
 <p align="center">
-  <img src="Frontend/logo.png" alt="SecureMail Logo" width="120px" style="border-radius: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.15);"/>
+  <img src="Frontend/logo.png" alt="SecureMail Logo" width="128px" style="filter: drop-shadow(0 8px 24px rgba(0,0,0,0.25));"/>
 </p>
 
 <h3 align="center">SecureMail</h3>
 <p align="center"><strong>An Advanced Gateway Email Security Platform, Phishing Analyzer, & Forensic Intelligence Dashboard.</strong></p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-3.0.0-blue?style=for-the-badge" alt="Version 3.0.0"/>
+  <img src="https://img.shields.io/badge/Version-4.0.0-blue?style=for-the-badge" alt="Version 4.0.0"/>
   <img src="https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white" alt="FastAPI Badge"/>
   <img src="https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python Badge"/>
   <img src="https://img.shields.io/badge/JavaScript-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black" alt="JavaScript Badge"/>

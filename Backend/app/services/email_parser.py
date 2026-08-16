@@ -11,39 +11,12 @@ from email.header import decode_header
 from typing import List, Tuple, Optional, Dict
 from urllib.parse import urlparse
 from app.utils.logger import setup_logger
+from app.services.homograph_service import evaluate_domain_homograph, ENTERPRISE_BRANDS
 
 logger = setup_logger(__name__)
 
-# Legitimate global brands dictionary
-LEGITIMATE_BRANDS = {
-    "paypal": "paypal.com",
-    "google": "google.com",
-    "gmail": "gmail.com",
-    "microsoft": "microsoft.com",
-    "outlook": "outlook.com",
-    "apple": "apple.com",
-    "amazon": "amazon.com",
-    "netflix": "netflix.com",
-    "facebook": "facebook.com",
-    "instagram": "instagram.com",
-    "twitter": "twitter.com",
-    "linkedin": "linkedin.com",
-    "dropbox": "dropbox.com",
-    "yahoo": "yahoo.com",
-    "chase": "chase.com",
-    "citibank": "citibank.com",
-    "wellsfargo": "wellsfargo.com",
-    "bankofamerica": "bankofamerica.com",
-    "zoom": "zoom.us",
-    "adobe": "adobe.com",
-    "salesforce": "salesforce.com",
-    "ebay": "ebay.com",
-    "walmart": "walmart.com",
-    "stripe": "stripe.com",
-    "fedex": "fedex.com",
-    "dhl": "dhl.com",
-    "ups": "ups.com",
-}
+# Maintain backward compatibility with legacy dictionary
+LEGITIMATE_BRANDS = {k: v["official"][0] for k, v in ENTERPRISE_BRANDS.items()}
 
 # Weighted Phishing Keywords
 PHISHING_WEIGHTS = {
@@ -352,18 +325,27 @@ def _extract_urls(content: str) -> List[Dict]:
         parsed = urlparse(url)
         domain = parsed.netloc.lower().replace("www.", "")
         is_shortened = domain in URL_SHORTENERS
-        is_lookalike, spoofed_brand = _check_domain_lookalike(domain)
+        homograph_verdict = evaluate_domain_homograph(domain)
+        is_lookalike = homograph_verdict.get("is_lookalike", False)
+        spoofed_brand = homograph_verdict.get("spoofed_brand")
+        subdomain_spoof = "subdomain_brand_trap" in homograph_verdict.get("attack_vectors", [])
+        is_homograph = homograph_verdict.get("is_homograph", False)
 
         results.append({
-                "url": url,
-                "domain": domain,
-                "registrable_domain": ".".join(domain.split(".")[-2:]) if len(domain.split(".")) >= 2 else domain,
-                "scheme": parsed.scheme,
-                "is_shortened": is_shortened,
-                "is_lookalike": is_lookalike,
-                "subdomain_spoof": any(b in domain and b not in ".".join(domain.split(".")[-2:]) for b in ["paypal","apple","google","microsoft","amazon","netflix","facebook","instagram"]),
-                "suspicious": is_shortened or is_lookalike or any(b in domain and b not in ".".join(domain.split(".")[-2:]) for b in ["paypal","apple","google","microsoft","amazon"]),
-            })
+            "url": url,
+            "domain": domain,
+            "registrable_domain": ".".join(domain.split(".")[-2:]) if len(domain.split(".")) >= 2 else domain,
+            "scheme": parsed.scheme,
+            "is_shortened": is_shortened,
+            "is_lookalike": is_lookalike,
+            "is_homograph": is_homograph,
+            "spoofed_brand": spoofed_brand,
+            "official_domain": homograph_verdict.get("official_domain"),
+            "subdomain_spoof": subdomain_spoof,
+            "attack_vectors": homograph_verdict.get("attack_vectors", []),
+            "homograph_analysis": homograph_verdict,
+            "suspicious": is_shortened or is_lookalike or subdomain_spoof,
+        })
 
     return results[:50]  # Cap at 50 URLs
 
@@ -627,33 +609,11 @@ def levenshtein_distance(s1: str, s2: str) -> int:
 
 def _check_domain_lookalike(domain: str) -> Tuple[bool, Optional[str]]:
     """
-    Check if a domain is an impersonation of a legitimate brand.
+    Check if a domain is an impersonation of a legitimate brand using homograph_service.
     Returns (is_lookalike, spoofed_brand).
     """
-    domain = domain.lower()
-    if domain in LEGITIMATE_BRANDS.values():
-        return False, None
-        
-    import re
-    parts = re.split(r"[\.\-]", domain)
-    for part in parts:
-        if part in ("www", "mail", "com", "org", "net", "edu", "gov", "co", "io", "ru", "xyz", "info", "biz", "uk", "us"):
-            continue
-            
-        # 1. Substring Impersonation check
-        for brand, official in LEGITIMATE_BRANDS.items():
-            if brand in part:
-                if official not in domain:
-                    return True, brand
-
-        # 2. Levenshtein edit distance check
-        for brand, official in LEGITIMATE_BRANDS.items():
-            if abs(len(part) - len(brand)) <= 2:
-                dist = levenshtein_distance(part, brand)
-                if 0 < dist <= 2:
-                    return True, brand
-                    
-    return False, None
+    verdict = evaluate_domain_homograph(domain)
+    return verdict.get("is_lookalike", False), verdict.get("spoofed_brand")
 
 
 def audit_received_hops(received_headers: list) -> dict:
