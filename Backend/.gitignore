@@ -1,10 +1,31 @@
-# ── Secrets — NEVER commit real API keys ──────────────────────────
+# ── Secrets, Keys & Credentials — NEVER commit to git ─────────────
 .env
-firebase-service-account.json
+.env.*
+*.env
+*.env.local
+*.env.production
+*.env.development
+!.env.example
+
+# Service accounts & Private keys
+firebase-service-account*.json
 *firebase-adminsdk*.json
+*service-account*.json
+*.pem
+*.key
+*.p12
+*.pfx
+*.cert
+*.crt
+*.credentials
+client_secret*.json
+google-services.json
+
+# Local Databases, user records, and tracking
 usage_tracking.db
 *.db
-*.sqlite*
+*.sqlite
+*.sqlite3
 user_records.json
 
 
@@ -26,14 +47,18 @@ venv/
 env/
 ENV/
 
-# ── Testing ───────────────────────────────────────────────────────
+# ── Testing & Coverage ────────────────────────────────────────────
 .pytest_cache/
 .coverage
+.coverage.*
 htmlcov/
 *.xml
+.tox/
 
-# ── Forensics logs (may contain sensitive email data) ─────────────
+# ── Forensics & Email Logs (may contain sensitive email data) ─────
 forensics_logs/
+*.eml
+*.msg
 
 # ── IDE ───────────────────────────────────────────────────────────
 .idea/
