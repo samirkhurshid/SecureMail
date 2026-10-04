@@ -62,6 +62,8 @@ Backend/forensics_logs/
 forensics_logs/
 *.eml
 *.msg
+!sample_emails/*.eml
+!sample_emails/*.msg
 
 
 # ── IDE & Editor Artifacts ─────────────────────────────────────────

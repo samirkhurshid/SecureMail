@@ -188,6 +188,10 @@ def compute_email_risk_score(
     if phishing.get("extortion") and not (phishing.get("webcam_threat") or phishing.get("do_not_contact_instruction")):
         moderate_hits.append(("extortion_language", 12))
 
+    if any(a.get("is_dangerous_ext") for a in attachments):
+        moderate_hits.append(("dangerous_attachment_extension", 25))
+        threat_types.add("malicious_attachment")
+
     # Apply moderate hits with DIMINISHING RETURNS — the 1st hit counts in
     # full, the 2nd at 85%, the 3rd at 70%, etc. This rewards genuine
     # multi-signal correlation without letting 5 weak hits = 1 strong hit.

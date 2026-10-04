@@ -1,0 +1,34 @@
+From: "GitHub Notifications" <notifications@github.com>
+To: developer@example.com
+Subject: [GitHub] Security advisory alerts and release digest for your repositories
+Date: Sun, 04 Oct 2026 06:00:00 +0000
+Message-ID: <digest-99128@github.com>
+MIME-Version: 1.0
+Content-Type: text/html; charset="UTF-8"
+Authentication-Results: mx.google.com;
+    spf=pass (google.com: domain of notifications@github.com designates 192.30.252.204 as permitted sender) smtp.mailfrom=notifications@github.com;
+    dkim=pass header.i=@github.com header.s=s2024 header.b=CleanDkimSig;
+    dmarc=pass (p=REJECT sp=REJECT dis=NONE) header.from=github.com
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed; d=github.com; s=s2024; h=from:to:subject:date:message-id:mime-version:content-type; bh=abcd1234efgh5678=; b=CleanDkimSigPass123==
+Received: from smtp.github.com (192.30.252.204) by mx.google.com with ESMTPS id clean992; Sun, 04 Oct 2026 06:00:00 +0000
+
+<!DOCTYPE html>
+<html>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; color: #24292f; line-height: 1.5;">
+  <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+    <h2>GitHub Weekly Summary</h2>
+    <p>Hello Developer,</p>
+    <p>Here is your weekly summary of activity across your watched open-source repositories:</p>
+    <ul>
+      <li><a href="https://github.com/torvalds/linux">torvalds/linux</a> - Kernel update 6.12 release candidates available</li>
+      <li><a href="https://github.com/python/cpython">python/cpython</a> - Python maintenance and security updates published</li>
+    </ul>
+    <hr style="border: none; border-top: 1px solid #d0d7de; margin: 24px 0;"/>
+    <p style="font-size: 12px; color: #57606a;">
+      You can manage your notification preferences anytime at 
+      <a href="https://github.com/settings/notifications">GitHub Notification Settings</a>.
+    </p>
+    <p style="font-size: 12px; color: #57606a;">© 2026 GitHub, Inc. 88 Colin P Kelly Jr St, San Francisco, CA 94107</p>
+  </div>
+</body>
+</html>

@@ -1,0 +1,39 @@
+From: "IT Service Desk" <support@micros0ft-mfa.ru>
+To: target-employee@enterprise.com
+Subject: URGENT: Microsoft 365 MFA Re-Authentication Required Within 24 Hours
+Date: Sun, 04 Oct 2026 11:30:00 +0000
+Message-ID: <mfa-reset-77291@micros0ft-mfa.ru>
+MIME-Version: 1.0
+Content-Type: multipart/related; boundary="----=_Part_77192_1829102918.1728038200"
+Authentication-Results: mx.google.com;
+    spf=fail smtp.mailfrom=support@micros0ft-mfa.ru;
+    dkim=fail;
+    dmarc=fail
+
+------=_Part_77192_1829102918.1728038200
+Content-Type: text/html; charset="UTF-8"
+
+<!DOCTYPE html>
+<html>
+<body style="font-family: Arial, sans-serif; text-align: center; color: #222;">
+  <div style="max-width: 500px; margin: 0 auto; border: 1px solid #ddd; padding: 20px; border-radius: 8px;">
+    <h2 style="color: #0078d4;">Microsoft 365 Security Alert</h2>
+    <p>Your Multi-Factor Authentication (MFA) certificate will expire within <strong>24 hours</strong>.</p>
+    <p>To avoid being locked out of your email and corporate applications, use your mobile camera to scan the secure QR verification code below:</p>
+    <div style="margin: 20px 0;">
+      <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAZoAAAGaAQAAAAAefbjOAAADSElEQVR4nO1cS46jMBAtA1IvQeoD5CjkBnOkUY40N8BHyQFGgmVLoBrVx04nqzCDwhC/t0BgUgoul+rzXBCYViNW62WIIOSAIhxQhAOKcEARDijCAUUcSRHB0ZAfOhnrFh8+T+kH510ebyUgtIEiehaMejYTDzp2/WCidpbzWu+nLBQqf2NFkK10r8YwysKPefVbuSEGImNqFmY5w38+pwpCGyoinNuZNExQPy6BaPpgjxUb/9NTgNDLFdE8XHPsfjccu3qm2I0ctvunCkKHsohWwsIkZ1NDyQ6Wb/bCx5lTBaF/t4hoRlBT6MfPOfS/PilIZplt485ZQOVvbxF8G4inL1t9jicpM1q5VA+yx+NVENqJjzhLKhlDCDxISSE1p47xpZPLqSGKQk+AjyjGR0xEgdpRStDkMvpB84il0btWdbz68SoI7cNHsFBS5h7UIpSUGNrMWslBuSrwEYX4iNCzH5hoboLkmNRfAzG1s7uR+KOGjyhHKAZZd0sX1G9oeplTiBMLTZULjmPMaR0glJAY69lCgscFIbBtN0MIbKOy7QAWuwwz6iV7GLTg6JS7VhZbi9HZWasQZONrn8dbBwhtsNNFtqvlqaTvfrHyEXrQ5NO3wLDT9da2R77KPN+VHhZE0phxFLCIoqrPNicTWmmqHaTdcM8xUX0WFTUE2Rg8rVA+4hZTUjhB1Cgjs6zNC1j7lI95uWkpp5gFWOwjLu5f+og6tU+lfinLMXPocEYTPqIgoXCWfU6rPu1MbWMJfJHCMyeaR5rT84DQY63Blkx41WGJgzsKMwY/II8ow4xitwStOZ2IEu7a+2TUURDxpdvv8dYBQlv0YnNuvc+Vpiaamahw/go+oqCooUi74emuZ5ZeghrQnV/SO12k7kGSSnUP4edVCk8JIje24hhzWgkIJbhnYEEmJXzHM1NXt5d84CNKMaPJX+rkISWVfNFsUy6kAVN/5fzVQea0ChBKuGUP9I24tIa6+90MMFRlmlEv7//2V3+Pg4dJi1Fpl8ivCB9uTs8AQg+KaHP7bfsl8UM+FCDNMp5P1mxfEEB3flF7n5Tjwn31ac0y6JgpQyjgy2SHWKcKQgYowgFFOKAIBxThgCIcr1PEH226aw9USX1RAAAAAElFTkSuQmCC" alt="MFA Verification QR Code" style="width: 200px; height: 200px; border: 1px solid #ccc; padding: 5px;"/>
+    </div>
+    <p style="font-size: 12px; color: #666;">Do not share this QR code. It is encrypted specifically for your enterprise account credentials.</p>
+    <p style="font-size: 11px; color: #999;">Microsoft Corporation | IT Security Operations Center</p>
+  </div>
+</body>
+</html>
+
+------=_Part_77192_1829102918.1728038200
+Content-Type: image/png; name="quishing_mfa_qr.png"
+Content-ID: <quishing_mfa_qr>
+Content-Disposition: inline; filename="quishing_mfa_qr.png"
+Content-Transfer-Encoding: base64
+
+iVBORw0KGgoAAAANSUhEUgAAAZoAAAGaAQAAAAAefbjOAAADSElEQVR4nO1cS46jMBAtA1IvQeoD5CjkBnOkUY40N8BHyQFGgmVLoBrVx04nqzCDwhC/t0BgUgoul+rzXBCYViNW62WIIOSAIhxQhAOKcEARDijCAUUcSRHB0ZAfOhnrFh8+T+kH510ebyUgtIEiehaMejYTDzp2/WCidpbzWu+nLBQqf2NFkK10r8YwysKPefVbuSEGImNqFmY5w38+pwpCGyoinNuZNExQPy6BaPpgjxUb/9NTgNDLFdE8XHPsfjccu3qm2I0ctvunCkKHsohWwsIkZ1NDyQ6Wb/bCx5lTBaF/t4hoRlBT6MfPOfS/PilIZplt485ZQOVvbxF8G4inL1t9jicpM1q5VA+yx+NVENqJjzhLKhlDCDxISSE1p47xpZPLqSGKQk+AjyjGR0xEgdpRStDkMvpB84il0btWdbz68SoI7cNHsFBS5h7UIpSUGNrMWslBuSrwEYX4iNCzH5hoboLkmNRfAzG1s7uR+KOGjyhHKAZZd0sX1G9oeplTiBMLTZULjmPMaR0glJAY69lCgscFIbBtN0MIbKOy7QAWuwwz6iV7GLTg6JS7VhZbi9HZWasQZONrn8dbBwhtsNNFtqvlqaTvfrHyEXrQ5NO3wLDT9da2R77KPN+VHhZE0phxFLCIoqrPNicTWmmqHaTdcM8xUX0WFTUE2Rg8rVA+4hZTUjhB1Cgjs6zNC1j7lI95uWkpp5gFWOwjLu5f+og6tU+lfinLMXPocEYTPqIgoXCWfU6rPu1MbWMJfJHCMyeaR5rT84DQY63Blkx41WGJgzsKMwY/II8ow4xitwStOZ2IEu7a+2TUURDxpdvv8dYBQlv0YnNuvc+Vpiaamahw/go+oqCooUi74emuZ5ZeghrQnV/SO12k7kGSSnUP4edVCk8JIje24hhzWgkIJbhnYEEmJXzHM1NXt5d84CNKMaPJX+rkISWVfNFsUy6kAVN/5fzVQea0ChBKuGUP9I24tIa6+90MMFRlmlEv7//2V3+Pg4dJi1Fpl8ivCB9uTs8AQg+KaHP7bfsl8UM+FCDNMp5P1mxfEEB3flF7n5Tjwn31ac0y6JgpQyjgy2SHWKcKQgYowgFFOKAIBxThgCIcr1PEH226aw9USX1RAAAAAElFTkSuQmCC
+------=_Part_77192_1829102918.1728038200--
