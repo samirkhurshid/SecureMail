@@ -2270,22 +2270,48 @@ Authentication-Results: spf=fail; dkim=fail; dmarc=fail" style="width:100%;min-h
     <!-- ═══ EXTENSION ═══ -->
     <div class="page" id="page-extension">
       <div class="sec-hdr fu"><div><h2>Browser Extension</h2><p style="color:var(--t2);font-size:13px;margin-top:2px">One-click email threat detection in your browser</p></div></div>
+      
+      <!-- Direct Download Hero Banner -->
+      <div class="card card-p fu d1" style="margin-bottom:18px;background:linear-gradient(135deg,rgba(30,41,59,0.7),rgba(15,23,42,0.9));border:1px solid rgba(56,189,248,0.3);position:relative;overflow:hidden">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px">
+          <div style="max-width:540px">
+            <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(56,189,248,0.1);border:1px solid rgba(56,189,248,0.3);color:var(--cyan);font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">
+              <span>⚡</span> Direct Web Download (Pre-Configured)
+            </div>
+            <h3 style="font-size:18px;font-weight:700;margin-bottom:6px">Get the SecureMail Browser Extension</h3>
+            <p style="color:var(--t2);font-size:13px;line-height:1.5">
+              Protect your Gmail and Outlook inboxes directly in your browser. Download the pre-packaged extension zip below, or clone it from our GitHub repository.
+            </p>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <a href="securemail-extension.zip" download="securemail-extension.zip" class="btn btn-primary" style="padding:10px 18px;font-size:13px;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;gap:8px">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Download Extension (.zip)
+            </a>
+            <a href="https://github.com/samirkhurshid/SecureMail" target="_blank" rel="noopener noreferrer" class="btn btn-secondary" style="padding:10px 16px;font-size:13px;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;gap:8px">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+              GitHub Repository
+            </a>
+          </div>
+        </div>
+      </div>
+
       <div class="three-col fu d1" style="margin-bottom:14px">
         <div class="card card-p" style="text-align:center">
           <div style="width:52px;height:52px;background:linear-gradient(135deg,#4285f4,#34a853);border-radius:13px;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;box-shadow:0 0 18px rgba(66,133,244,0.3)">
             <svg width="26" height="26" viewBox="0 0 24 24" fill="white"><circle cx="12" cy="12" r="10"/></svg>
           </div>
-          <h3 style="font-size:14px;margin-bottom:7px">Chrome / Edge</h3>
-          <p style="color:var(--t2);font-size:12.5px;margin-bottom:14px">Load as unpacked developer extension</p>
-          <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="showExtInst('chrome')">Install on Chrome</button>
+          <h3 style="font-size:14px;margin-bottom:7px">Chrome / Edge / Brave</h3>
+          <p style="color:var(--t2);font-size:12.5px;margin-bottom:14px">Load unpacked in 30 seconds</p>
+          <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="showExtInst('chrome')">View Chrome Guide</button>
         </div>
         <div class="card card-p" style="text-align:center">
           <div style="width:52px;height:52px;background:linear-gradient(135deg,#ff6900,#ff3750);border-radius:13px;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;box-shadow:0 0 18px rgba(255,105,0,0.3)">
             <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/></svg>
           </div>
           <h3 style="font-size:14px;margin-bottom:7px">Firefox</h3>
-          <p style="color:var(--t2);font-size:12.5px;margin-bottom:14px">Load as temporary add-on via about:debugging</p>
-          <button class="btn btn-secondary" style="width:100%;justify-content:center" onclick="showExtInst('firefox')">Install on Firefox</button>
+          <p style="color:var(--t2);font-size:12.5px;margin-bottom:14px">Load temporary add-on via about:debugging</p>
+          <button class="btn btn-secondary" style="width:100%;justify-content:center" onclick="showExtInst('firefox')">View Firefox Guide</button>
         </div>
         <div class="card card-p" style="text-align:center;opacity:0.6">
           <div style="width:52px;height:52px;background:linear-gradient(135deg,var(--cyan),var(--purple));border-radius:13px;display:flex;align-items:center;justify-content:center;margin:0 auto 14px">
@@ -4711,11 +4737,25 @@ async function analyzeHeaders(){
 // ── Browser Extension ─────────────────────────
 function showExtInst(browser){
   const steps={
-    chrome:['Open Chrome and go to <code style="color:var(--cyan)">chrome://extensions</code>','Enable <strong>Developer Mode</strong> (top-right toggle)','Click <strong>Load unpacked</strong> and select the <code style="color:var(--cyan)">extension/</code> folder','The SecureMail shield icon appears in your toolbar — click it to scan!'],
-    firefox:['Open Firefox and go to <code style="color:var(--cyan)">about:debugging#/runtime/this-firefox</code>','Click <strong>Load Temporary Add-on</strong>','Navigate to the <code style="color:var(--cyan)">extension/</code> folder and select <code style="color:var(--cyan)">manifest.json</code>','SecureMail will be active until Firefox restarts']
+    chrome:[
+      'Click the <strong>Download Extension (.zip)</strong> button above (or download from the <a href="https://github.com/samirkhurshid/SecureMail" target="_blank" style="color:var(--cyan);text-decoration:underline;font-weight:600">GitHub Repository</a>).',
+      'Right-click the downloaded <code style="color:var(--cyan)">securemail-extension.zip</code> file and choose <strong>Extract All…</strong> to unzip it into a folder.',
+      'Open Chrome, Edge, or Brave and navigate to <code style="color:var(--cyan)">chrome://extensions</code> (or <code style="color:var(--cyan)">edge://extensions</code> for Edge) in your address bar.',
+      'Turn ON <strong>Developer mode</strong> using the toggle switch located in the top-right corner.',
+      'Click the <strong>Load unpacked</strong> button in the top-left toolbar, and select the extracted <code style="color:var(--cyan)">extension</code> folder.',
+      '<strong>Protection Active!</strong> The SecureMail shield icon appears in your browser toolbar. It automatically connects to the live cloud detection engine!'
+    ],
+    firefox:[
+      'Click the <strong>Download Extension (.zip)</strong> button above (or download from the <a href="https://github.com/samirkhurshid/SecureMail" target="_blank" style="color:var(--cyan);text-decoration:underline;font-weight:600">GitHub Repository</a>).',
+      'Extract the downloaded <code style="color:var(--cyan)">securemail-extension.zip</code> file to a folder on your computer.',
+      'Open Firefox and navigate to <code style="color:var(--cyan)">about:debugging#/runtime/this-firefox</code> in your address bar.',
+      'Click <strong>Load Temporary Add-on…</strong>',
+      'Browse into the extracted folder and select the <code style="color:var(--cyan)">manifest.json</code> file.',
+      '<strong>Active!</strong> SecureMail is now running and protecting your web mail sessions.'
+    ]
   };
-  document.getElementById('ext-inst-title').textContent = browser==='chrome'?'Chrome / Edge Installation':'Firefox Installation';
-  document.getElementById('ext-inst-body').innerHTML=steps[browser].map((s,i)=>`<div class="ext-step"><div class="ext-step-num">${i+1}</div><div class="ext-step-txt">${s}</div></div>`).join('');
+  document.getElementById('ext-inst-title').innerHTML = (browser==='chrome'?'Chrome / Edge / Brave Installation Guide':'Firefox Installation Guide') + ' <span style="font-size:12px;color:var(--t2);font-weight:normal;margin-left:8px">(No Chrome Web Store account needed)</span>';
+  document.getElementById('ext-inst-body').innerHTML = steps[browser].map((s,i)=>`<div class="ext-step"><div class="ext-step-num">${i+1}</div><div class="ext-step-txt">${s}</div></div>`).join('');
   document.getElementById('ext-inst-card').style.display='block';
   document.getElementById('ext-inst-card').scrollIntoView({behavior:'smooth',block:'nearest'});
 }

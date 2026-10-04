@@ -1,7 +1,7 @@
 // SecureMail — Background Service Worker
 // Handles: context menus, notifications, badge state, message passing
 
-const PRODUCTION_API_URL = 'https://securemail-backend.onrender.com';
+const PRODUCTION_API_URL = 'https://securemail-vuka.onrender.com';
 const DEFAULT_API = `${PRODUCTION_API_URL}/api`;
 
 // ── Install: create context menus ─────────────────────────────────────────────
@@ -110,12 +110,14 @@ chrome.runtime.onMessageExternal.addListener((msg, sender, sendResponse) => {
   const allowedOrigins = [
     'http://localhost:8000',
     'http://127.0.0.1:8000',
-    'https://securemail-backend.onrender.com'
+    'https://securemail-vuka.onrender.com',
+    'https://secure-mail-hazel.vercel.app'
   ];
   const origin = sender?.origin ? sender.origin.replace(/\/+$/, '') : '';
   const isAllowed = origin && (
     allowedOrigins.includes(origin) ||
-    origin.endsWith('.onrender.com')
+    origin.endsWith('.onrender.com') ||
+    origin.endsWith('.vercel.app')
   );
 
   if (!isAllowed) {
@@ -332,10 +334,7 @@ async function getApiBase() {
           return trimmed.endsWith('/api') ? trimmed : `${trimmed}/api`;
         }
       }
-    } else {
-      await chrome.storage.local.set({ dev_backend_override: 'http://localhost:8000' });
-      return 'http://localhost:8000/api';
     }
   } catch (e) {}
-  return 'http://localhost:8000/api';
+  return DEFAULT_API;
 }

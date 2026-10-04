@@ -17,7 +17,8 @@
     "matches": [
       "http://localhost:8000/*",
       "http://127.0.0.1:8000/*",
-      "https://*.onrender.com/*"
+      "https://*.onrender.com/*",
+      "https://*.vercel.app/*"
     ]
   },
 
@@ -29,6 +30,7 @@
     "http://localhost:8000/*",
     "http://127.0.0.1:8000/*",
     "https://*.onrender.com/*",
+    "https://*.vercel.app/*",
     "https://identitytoolkit.googleapis.com/*",
     "https://securetoken.googleapis.com/*",
     "https://*/*"
@@ -66,7 +68,8 @@
         "https://outlook.office365.com/*",
         "http://localhost:8000/*",
         "http://127.0.0.1:8000/*",
-        "https://*.onrender.com/*"
+        "https://*.onrender.com/*",
+        "https://*.vercel.app/*"
       ],
       "js": ["content.js"],
       "css": ["content.css"],

@@ -6,10 +6,10 @@
 
 // Backend URL configuration (defaults to http://localhost:8000 for local development/testing)
 const LOCAL_DEV_URL = 'http://localhost:8000';
-const PRODUCTION_API_URL = 'https://securemail-backend.onrender.com';
+const PRODUCTION_API_URL = 'https://securemail-vuka.onrender.com';
 const PRODUCTION_API_BASE = `${PRODUCTION_API_URL}/api`;
 
-let API_BASE = `${LOCAL_DEV_URL}/api`;
+let API_BASE = PRODUCTION_API_BASE;
 let _pendingEmailData = null; // extracted email waiting for user to click "Scan This Email"
 let _currentPlatform  = null; // platform of the active mail-client tab
 let _currentTab       = null; // active tab reference
@@ -25,8 +25,8 @@ let _currentScanData = null; // current scan results reference
 
 /**
  * Resolves active API_BASE:
- * - Uses `dev_backend_override` in chrome.storage.local (defaults to 'http://localhost:8000' for local dev).
- * - Can be pointed to PRODUCTION_API_BASE or any custom URL anytime.
+ * - Uses `dev_backend_override` in chrome.storage.local if configured.
+ * - Defaults to PRODUCTION_API_BASE (cloud backend) for seamless zero-config setup.
  */
 async function resolveApiBase() {
   try {
@@ -39,16 +39,11 @@ async function resolveApiBase() {
           return API_BASE;
         }
       }
-    } else {
-      // Default to local development server for testing
-      await chrome.storage.local.set({ dev_backend_override: 'http://localhost:8000' });
-      API_BASE = 'http://localhost:8000/api';
-      return API_BASE;
     }
   } catch (e) {
     console.warn('SecureMail: failed reading dev_backend_override', e);
   }
-  API_BASE = `${LOCAL_DEV_URL}/api`;
+  API_BASE = PRODUCTION_API_BASE;
   return API_BASE;
 }
 
