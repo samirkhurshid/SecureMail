@@ -20,6 +20,15 @@ _IP_CACHE: dict[str, tuple[float, dict]] = {}
 _IP_CACHE_TTL = 86400.0  # 24 hours
 
 
+def get_cached_ip(ip: str) -> Optional[dict]:
+    """Retrieve cached AbuseIPDB result if valid and not expired."""
+    entry = _IP_CACHE.get(ip)
+    if entry and (time.time() - entry[0]) < _IP_CACHE_TTL:
+        return dict(entry[1])
+    return None
+
+
+
 async def check_ip(ip: str) -> dict:
     """
     Query AbuseIPDB for an IP address.

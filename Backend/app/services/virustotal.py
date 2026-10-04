@@ -25,6 +25,15 @@ from urllib.parse import urlparse
 _VT_CACHE: dict[str, tuple[float, dict]] = {}
 _VT_CACHE_TTL = 86400.0  # 24 hours
 
+
+def get_cached_result(key: str) -> Optional[dict]:
+    """Retrieve cached VirusTotal result if valid and not expired."""
+    entry = _VT_CACHE.get(key)
+    if entry and (time.time() - entry[0]) < _VT_CACHE_TTL:
+        return dict(entry[1])
+    return None
+
+
 # High-reputation infrastructure domains that do not need blocking VirusTotal lookups
 _TRUSTED_ROOTS = (
     "google.com", "googleapis.com", "gstatic.com", "googleusercontent.com",

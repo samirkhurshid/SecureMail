@@ -1875,11 +1875,30 @@ From: Security Operations <alerts@security-audit.internal>
 Subject: Urgent: Security Verification Notice
 Authentication-Results: spf=fail; dkim=fail; dmarc=fail" style="width:100%;min-height:130px;resize:vertical;background:rgba(0,0,0,0.2);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--t1);font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.6;padding:12px;outline:none;transition:all 0.18s;display:block;margin-bottom:12px"></textarea>
 
+            <!-- Inspection Depth Selector (Quick <0.2s vs Deep 87+ VT Engines) -->
+            <div style="display:flex;align-items:center;justify-content:space-between;background:rgba(15,23,42,0.6);border:1px solid var(--border);border-radius:var(--r-sm);padding:8px 12px;margin-bottom:12px;gap:10px;flex-wrap:wrap">
+              <div style="display:flex;align-items:center;gap:8px">
+                <span id="scan-mode-icon" style="font-size:16px">⚡</span>
+                <div>
+                  <div style="font-size:12px;font-weight:700;color:var(--t1)">Inspection Depth</div>
+                  <div style="font-size:10.5px;color:var(--t3)" id="scan-mode-desc">Quick Scan: Instant heuristic, ML classifier &amp; Threat Vault (&lt;200ms)</div>
+                </div>
+              </div>
+              <div style="display:inline-flex;background:rgba(0,0,0,0.4);padding:3px;border-radius:6px;border:1px solid rgba(255,255,255,0.08);gap:4px">
+                <button type="button" id="btn-mode-quick" onclick="setScanMode('quick')" class="scan-mode-btn" style="padding:4px 10px;font-size:11.5px;font-weight:600;border-radius:4px;border:none;cursor:pointer;display:flex;align-items:center;gap:5px;transition:all 0.15s;background:var(--accent);color:#fff">
+                  <span>⚡</span> Quick (&lt;0.2s)
+                </button>
+                <button type="button" id="btn-mode-deep" onclick="setScanMode('deep')" class="scan-mode-btn" style="padding:4px 10px;font-size:11.5px;font-weight:600;border-radius:4px;border:none;cursor:pointer;display:flex;align-items:center;gap:5px;transition:all 0.15s;background:transparent;color:var(--t2)">
+                  <span>🛡️</span> Deep (87+ VT Engines)
+                </button>
+              </div>
+            </div>
+
             <div style="display:flex;gap:8px;margin-bottom:16px">
-              <button class="btn btn-secondary" style="font-size:12px;padding:7px 14px" onclick="clearScan()">Or enter text</button>
-              <button class="btn btn-primary" onclick="scanEmail()">
+              <button class="btn btn-secondary" style="font-size:12px;padding:7px 14px" onclick="clearScan()">Clear</button>
+              <button class="btn btn-primary" onclick="scanEmail()" id="main-scan-btn">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                Scan
+                <span id="scan-btn-label">Quick Scan</span>
               </button>
             </div>
 
@@ -1909,13 +1928,17 @@ Authentication-Results: spf=fail; dkim=fail; dmarc=fail" style="width:100%;min-h
               <div id="url-quick-result" style="display:none;margin-top:10px"></div>
             </div>
 
-            <div class="loader-row" id="scan-loader" style="margin-top:12px"><div class="spinner"></div><span>Scanning with VirusTotal & AI Intelligence…</span></div>
+            <div class="loader-row" id="scan-loader" style="margin-top:12px"><div class="spinner"></div><span id="scan-loader-text">Analyzing email…</span></div>
             <div class="err" id="scan-err"></div>
 
-            <div style="margin-top:14px">
-              <button class="btn btn-secondary btn-sm" onclick="runDemo()">
+            <div style="margin-top:14px;display:flex;gap:8px">
+              <button class="btn btn-secondary btn-sm" onclick="runDemo(false)" title="Instant heuristic demo">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                Run Demo Scan
+                Demo (Quick)
+              </button>
+              <button class="btn btn-secondary btn-sm" onclick="runDemo(true)" title="Deep multi-engine VirusTotal demo">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                Demo (Deep VT)
               </button>
             </div>
           </div>
@@ -3110,13 +3133,50 @@ emailDrop.addEventListener('drop',e=>{e.preventDefault();emailDrop.classList.rem
 function handleEmlFile(e){if(e.target.files[0])readEmlFile(e.target.files[0])}
 function readEmlFile(f){const r=new FileReader();r.onload=e=>document.getElementById('email-input').value=e.target.result;r.readAsText(f)}
 
-async function scanEmail(){
+// ── Scan Mode State Management (Quick <0.2s vs Deep 87+ VT Engines) ──
+let _currentScanMode = 'quick';
+
+function setScanMode(mode) {
+  _currentScanMode = mode;
+  const btnQ = document.getElementById('btn-mode-quick');
+  const btnD = document.getElementById('btn-mode-deep');
+  const desc = document.getElementById('scan-mode-desc');
+  const scanBtnLabel = document.getElementById('scan-btn-label');
+  const icon = document.getElementById('scan-mode-icon');
+  
+  if (mode === 'deep') {
+    if (btnQ) { btnQ.style.background = 'transparent'; btnQ.style.color = 'var(--t2)'; }
+    if (btnD) { btnD.style.background = 'var(--accent)'; btnD.style.color = '#fff'; }
+    if (desc) desc.textContent = 'Deep Scan: Queries 87+ VirusTotal AV engines & AbuseIPDB (3-6s)';
+    if (scanBtnLabel) scanBtnLabel.textContent = 'Deep Scan (VT)';
+    if (icon) icon.textContent = '🛡️';
+  } else {
+    if (btnQ) { btnQ.style.background = 'var(--accent)'; btnQ.style.color = '#fff'; }
+    if (btnD) { btnD.style.background = 'transparent'; btnD.style.color = 'var(--t2)'; }
+    if (desc) desc.textContent = 'Quick Scan: Instant heuristic, ML classifier & Threat Vault (<200ms)';
+    if (scanBtnLabel) scanBtnLabel.textContent = 'Quick Scan';
+    if (icon) icon.textContent = '⚡';
+  }
+}
+
+async function scanEmail(forceDeep = false){
   const raw = document.getElementById('email-input').value.trim();
   if(!raw){errShow('scan-err','Please paste an email first.');return}
-  errShow('scan-err','');loader('scan-loader',true);
-  showResultLoading();
+  const isDeep = forceDeep || (_currentScanMode === 'deep');
+  errShow('scan-err','');
+  
+  const loaderText = document.getElementById('scan-loader-text');
+  if (loaderText) {
+    loaderText.textContent = isDeep ? 'Deep Scanning with 87+ VirusTotal Engines & AbuseIPDB…' : 'Running instant heuristics, ML classifier & Threat Vault…';
+  }
+  loader('scan-loader',true);
+  showResultLoading(isDeep ? 'Deep Scanning (VirusTotal 87+ Engines)…' : 'Analyzing instantly…');
   try{
-    const r = await apiFetch(`${API}/scan/email`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({raw_email:raw})});
+    const r = await apiFetch(`${API}/scan/email`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({raw_email:raw, deep_scan:isDeep})
+    });
     if(r.status === 429) {
       const errData = await r.json().catch(() => ({}));
       const detail = errData.detail || errData;
@@ -3137,9 +3197,22 @@ async function scanEmail(){
   loader('scan-loader',false);
 }
 
-async function runDemo(){
+function escalateToDeepScan() {
+  setScanMode('deep');
+  toast('Escalating to Deep Multi-Engine VirusTotal scan…', 'info');
+  scanEmail(true);
+}
+
+async function runDemo(forceDeep = false){
   nav('scan');
-  errShow('scan-err','');loader('scan-loader',true);showResultLoading();
+  const isDeep = forceDeep || (_currentScanMode === 'deep');
+  errShow('scan-err','');
+  const loaderText = document.getElementById('scan-loader-text');
+  if (loaderText) {
+    loaderText.textContent = isDeep ? 'Deep demo audit via VirusTotal & AbuseIPDB…' : 'Running instant heuristic demo…';
+  }
+  loader('scan-loader',true);
+  showResultLoading(isDeep ? 'Deep Scanning Demo (87+ AV Engines)…' : 'Running Quick Demo…');
   const demoEmail = `From: PayPal Support <noreply@paypa1-support.ru>
 Reply-To: help@secure-login.net
 To: victim@example.com
@@ -3159,7 +3232,7 @@ PayPal Security Team`;
   const inputEl = document.getElementById('email-input');
   if (inputEl) inputEl.value = demoEmail;
   try{
-    const r = await apiFetch(`${API}/scan/demo`);
+    const r = await apiFetch(`${API}/scan/demo?deep=${isDeep ? 'true' : 'false'}`);
     const d = await r.json();
     if(!r.ok) throw new Error(d.detail||'Demo failed');
     renderScanResult(d);
@@ -3173,8 +3246,8 @@ function clearScan(){document.getElementById('email-input').value='';showResultR
 function showResultReady(){
   document.getElementById('scan-result-panel').innerHTML=`<div class="result-ready"><img src="logo.png" alt="Ready" style="width:54px;height:54px;opacity:0.22;border-radius:10px;object-fit:contain;filter:grayscale(30%)"><p>Ready to scan</p></div>`;
 }
-function showResultLoading(){
-  document.getElementById('scan-result-panel').innerHTML=`<div class="result-ready"><div class="spinner" style="width:32px;height:32px;border-width:3px"></div><p>Analyzing…</p></div>`;
+function showResultLoading(msg = 'Analyzing…'){
+  document.getElementById('scan-result-panel').innerHTML=`<div class="result-ready"><div class="spinner" style="width:32px;height:32px;border-width:3px"></div><p>${esc(msg)}</p></div>`;
 }
 
 function renderScanResult(d){
@@ -3394,23 +3467,38 @@ function renderScanResult(d){
     <!-- Threat Intelligence Overview Card -->
     <div style="margin-bottom:14px;background:rgba(15,23,42,0.6);border:1px solid var(--border);border-radius:var(--r-sm);padding:10px 14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
       <div style="display:flex;align-items:center;gap:8px">
-        <span style="font-size:16px">🛡️</span>
+        <span style="font-size:16px">${d.deep_scan ? '🛡️' : '⚡'}</span>
         <div>
-          <div style="font-size:12px;font-weight:700;color:var(--t1)">Multi-Engine Threat Intelligence (VirusTotal & AbuseIPDB)</div>
+          <div style="font-size:12px;font-weight:700;color:var(--t1)">
+            ${d.deep_scan ? 'Multi-Engine Threat Intelligence (VirusTotal & AbuseIPDB)' : 'Ultra-Fast Heuristic & Local Threat Vault'}
+          </div>
           <div style="font-size:11px;color:var(--t2)">
-            ${urls.length ? `VirusTotal analyzed ${urls.length} embedded link${urls.length>1?'s':''} across 87 commercial antivirus engines.` : 'VirusTotal verified: No suspicious external hyperlinks or malicious payloads.'}
-            ${ip ? ` · AbuseIPDB checked mail server ${esc(ip.ip||'')} (${ip.risk_level==='clean'?'0% abuse confidence':esc(ip.risk_level)}).` : ''}
+            ${d.deep_scan ? (
+              (urls.length ? `VirusTotal analyzed ${urls.length} embedded link${urls.length>1?'s':''} across 87 commercial antivirus engines.` : 'VirusTotal verified: No suspicious external hyperlinks or malicious payloads.') +
+              (ip && ip.ip ? ` · AbuseIPDB checked mail server ${esc(ip.ip)} (${ip.risk_level==='clean'?'0% abuse confidence':esc(ip.risk_level)}).` : '')
+            ) : (
+              `Completed in ${d.scan_duration_ms || '<200'}ms using ML ensemble, IDN lookalike detection, and Threat Vault IOC matching.`
+            )}
           </div>
         </div>
       </div>
-      <span class="det-pill det-clean" style="font-size:10px;font-weight:700">VirusTotal Integrated</span>
+      <div style="display:flex;align-items:center;gap:6px">
+        <span class="det-pill ${d.deep_scan ? 'det-clean' : 'det-unk'}" style="font-size:10px;font-weight:700">
+          ${d.deep_scan ? 'VirusTotal 87+ Engines Active' : '⚡ Quick Scan Mode'}
+        </span>
+        ${!d.deep_scan ? `
+          <button class="btn btn-sm btn-primary" onclick="escalateToDeepScan()" style="font-size:11px;padding:3px 9px" title="Escalate to 87+ VirusTotal Antivirus engines and AbuseIPDB">
+            🛡️ Escalate to Deep Scan ↗
+          </button>
+        ` : ''}
+      </div>
     </div>
 
     <!-- URLs -->
-    ${urls.length?`<div style="margin-bottom:14px"><div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--t3);margin-bottom:8px">Scanned URLs (${urls.length})</div>${urls.map(u=>{const vt=u.vt_result||{};const det=vt.detections??null;const dc=det!==null?(det>3?'det-high':'det-clean'):'det-unk';const dl=det!==null?`VirusTotal: ${det}/${vt.total_engines||87} Engines`:'VirusTotal: Local Intel';return`<div class="url-item"><div class="url-text">${esc(u.url)}</div><div class="url-meta"><span class="det-pill ${dc}">${dl}</span>${vt.permalink?`<a href="${esc(vt.permalink)}" target="_blank" rel="noopener noreferrer" style="font-size:11px;color:var(--cyan);text-decoration:underline;margin-left:4px" title="Open full scan report on VirusTotal.com">VT Report ↗</a>`:''}${u.is_homograph?'<span class="tag tag-critical" style="font-size:10px">IDN Homograph</span>':''}${u.is_lookalike?`<span class="tag tag-critical" style="font-size:10px">Lookalike (${esc(u.spoofed_brand||'brand')})</span>`:''}${u.subdomain_spoof?'<span class="tag tag-high" style="font-size:10px">Subdomain Trap</span>':''}${u.is_shortened?'<span class="tag tag-high" style="font-size:10px">Shortener</span>':''}</div></div>`}).join('')}</div>`:''}
+    ${urls.length?`<div style="margin-bottom:14px"><div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--t3);margin-bottom:8px">Scanned URLs (${urls.length})</div>${urls.map(u=>{const vt=u.vt_result||{};const det=vt.detections??null;const isQuick=vt.status==='quick_scan'||!d.deep_scan;const dc=isQuick?'det-unk':(det!==null?(det>3?'det-high':'det-clean'):'det-unk');const dl=isQuick?'⚡ Local Heuristic Verified':(det!==null?`VirusTotal: ${det}/${vt.total_engines||87} Engines`:'VirusTotal: Analyzed');return`<div class="url-item"><div class="url-text">${esc(u.url)}</div><div class="url-meta"><span class="det-pill ${dc}">${dl}</span>${vt.permalink?`<a href="${esc(vt.permalink)}" target="_blank" rel="noopener noreferrer" style="font-size:11px;color:var(--cyan);text-decoration:underline;margin-left:4px" title="Open full scan report on VirusTotal.com">VT Report ↗</a>`:''}${u.is_homograph?'<span class="tag tag-critical" style="font-size:10px">IDN Homograph</span>':''}${u.is_lookalike?`<span class="tag tag-critical" style="font-size:10px">Lookalike (${esc(u.spoofed_brand||'brand')})</span>`:''}${u.subdomain_spoof?'<span class="tag tag-high" style="font-size:10px">Subdomain Trap</span>':''}${u.is_shortened?'<span class="tag tag-high" style="font-size:10px">Shortener</span>':''}</div></div>`}).join('')}</div>`:''}
     
     <!-- Attachments -->
-    ${atts.length?`<div><div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--t3);margin-bottom:8px">Scanned Attachments (${atts.length})</div>${atts.map(a=>{const vt=a.vt_result||{};const det=vt.detections??0;return`<div class="url-item"><div class="url-text">${esc(a.filename)}</div><div class="url-meta"><span class="det-pill ${det>0?'det-high':'det-clean'}">VirusTotal Hash: ${det>0?`${det} Malicious Engines`:'0/70 AV Clean'}</span>${a.is_dangerous_ext?'<span class="tag tag-high" style="font-size:10px">Dangerous Ext</span>':''}</div></div>`}).join('')}</div>`:''}
+    ${atts.length?`<div><div style="font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:var(--t3);margin-bottom:8px">Scanned Attachments (${atts.length})</div>${atts.map(a=>{const vt=a.vt_result||{};const det=vt.detections??0;const isQuick=vt.status==='quick_scan'||!d.deep_scan;const label=isQuick?'⚡ Local SHA-256 Verified':(det>0?`${det} Malicious Engines`:'0/70 AV Clean');const pillClass=isQuick?'det-unk':(det>0?'det-high':'det-clean');return`<div class="url-item"><div class="url-text">${esc(a.filename)}</div><div class="url-meta"><span class="det-pill ${pillClass}">${label}</span>${a.is_dangerous_ext?'<span class="tag tag-high" style="font-size:10px">Dangerous Ext</span>':''}</div></div>`}).join('')}</div>`:''}
   `;
 }
 

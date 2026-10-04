@@ -6,6 +6,7 @@ class EmailScanRequest(BaseModel):
     headers_raw: Optional[str] = Field(default=None, max_length=500_000)
     sender_email: Optional[str] = Field(default=None, max_length=500)
     subject: Optional[str] = Field(default=None, max_length=2000)
+    deep_scan: bool = Field(default=False, description="When True, queries external VirusTotal and AbuseIPDB. When False, uses ultra-fast local heuristics (<200ms).")
 
     @field_validator('raw_email', 'headers_raw')
     @classmethod
