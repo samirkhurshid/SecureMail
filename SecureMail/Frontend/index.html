@@ -1,0 +1,1519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>SecureMail — Email Threat Intelligence</title>
+  <meta name="description" content="SecureMail — Real-time email threat detection, phishing analysis, and forensic intelligence."/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+  <!-- Leaflet.js for Interactive SMTP Hop Geolocation Maps -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <link rel="stylesheet" href="css/style.css"/>
+
+
+  <!-- Firebase SDK -->
+  <script type="module" src="js/auth.js"></script>
+</head>
+<body>
+
+<!-- ── Auth Screen ──────────────────────────────────────────── -->
+<div id="auth-screen" onclick="if(event.target===this)closeAuthModal()">
+  <div class="auth-card">
+    <button type="button" class="auth-close-btn" onclick="closeAuthModal()" title="Close">&times;</button>
+    <!-- Logo -->
+    <div class="auth-logo">
+      <div class="auth-logo-img-wrap">
+        <img src="logo.png" alt="SecureMail Logo" style="width:100%; height:100%; object-fit:contain; display:block;">
+      </div>
+      <span class="auth-logo-text">SecureMail</span>
+    </div>
+
+    <!-- Sign In Panel -->
+    <div id="auth-signin">
+      <div class="auth-title">Welcome back</div>
+      <div class="auth-sub">Sign in to your SecureMail account</div>
+      <div class="auth-err" id="signin-err"></div>
+      <!-- Smart Guidance Banner for Google-only Accounts -->
+      <div id="signin-google-hint" style="display:none; margin: 12px 0 16px; padding: 12px 14px; background: rgba(66, 133, 244, 0.12); border: 1px solid rgba(66, 133, 244, 0.4); border-radius: 10px; font-size: 12.5px; text-align: left;">
+        <div style="display:flex; align-items:flex-start; gap:10px;">
+          <span style="font-size:18px; line-height:1.2;">💡</span>
+          <div>
+            <strong style="color:var(--t1); display:block; margin-bottom:3px; font-size:13px;">Google Account Detected</strong>
+            <span style="color:var(--t2); font-size:12px; line-height:1.45; display:block;">This email was registered via Google OAuth and has no standalone password set. Please click <strong>Continue with Google</strong> below to sign in instantly.</span>
+          </div>
+        </div>
+      </div>
+      <input class="auth-input" id="signin-email" type="email" placeholder="Email address" autocomplete="email"/>
+      <div class="auth-pw-wrap">
+        <input class="auth-input" id="signin-password" type="password" placeholder="Password" autocomplete="current-password"/>
+        <button type="button" class="pw-eye-btn" onclick="togglePwVis(this)" tabindex="-1" aria-label="Toggle password visibility">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>
+      </div>
+      <button class="auth-btn auth-btn-primary" id="signin-btn" onclick="doSignIn()">Sign In</button>
+      <div class="auth-divider">or</div>
+      <button class="auth-btn auth-btn-google" onclick="doGoogleSignIn()">
+        <svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+        Continue with Google
+      </button>
+      <div style="text-align:center;margin-top:6px">
+        <a onclick="showForgotPassword()" style="font-size:12px;color:#818cf8;cursor:pointer">Forgot password?</a>
+      </div>
+      <div class="auth-switch">Don't have an account? <a onclick="showSignUp()">Create one</a></div>
+      <div style="margin-top:14px; text-align:center;">
+        <button type="button" class="btn btn-secondary" style="width:100%; justify-content:center;" onclick="showTrialScreen()">← Back to Free Scanner</button>
+      </div>
+      <div style="text-align:center; margin-top:12px; font-size:11.5px; color:var(--t3);">
+        <a href="privacy.html" target="_blank" style="color:var(--t3); text-decoration:none;">Privacy Policy</a> · <a href="terms.html" target="_blank" style="color:var(--t3); text-decoration:none;">Terms of Service</a>
+      </div>
+    </div>
+
+    <!-- Sign Up Panel -->
+    <div id="auth-signup" style="display:none">
+      <div class="auth-title">Create account</div>
+      <div class="auth-sub">Start securing your emails today</div>
+      <div class="auth-err" id="signup-err"></div>
+      <input class="auth-input" id="signup-name" type="text" placeholder="Full name" autocomplete="name"/>
+      <input class="auth-input" id="signup-email" type="email" placeholder="Email address" autocomplete="email"/>
+      <div class="auth-pw-wrap">
+        <input class="auth-input" id="signup-password" type="password" placeholder="Password (min 8 chars, 1 uppercase)" autocomplete="new-password"/>
+        <button type="button" class="pw-eye-btn" onclick="togglePwVis(this)" tabindex="-1" aria-label="Toggle password visibility">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>
+      </div>
+      <div class="auth-pw-wrap">
+        <input class="auth-input" id="signup-confirm" type="password" placeholder="Confirm password" autocomplete="new-password"/>
+        <button type="button" class="pw-eye-btn" onclick="togglePwVis(this)" tabindex="-1" aria-label="Toggle password visibility">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>
+      </div>
+      <button class="auth-btn auth-btn-primary" id="signup-btn" onclick="doSignUp()">Create Account</button>
+      <div style="font-size:11.5px; color:var(--t3); text-align:center; margin:10px 0;">By creating an account, you agree to our <a href="terms.html" target="_blank" style="color:#818cf8; text-decoration:none;">Terms of Service</a> and <a href="privacy.html" target="_blank" style="color:#818cf8; text-decoration:none;">Privacy Policy</a>.</div>
+      <div class="auth-divider">or</div>
+      <button class="auth-btn auth-btn-google" onclick="doGoogleSignIn()">
+        <svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+        Continue with Google
+      </button>
+      <div class="auth-switch">Already have an account? <a onclick="showSignIn()">Sign in</a></div>
+    </div>
+
+    <!-- Forgot Password Panel -->
+    <div id="auth-forgot" style="display:none">
+      <div class="auth-title">Reset password</div>
+      <div class="auth-sub">We'll send a reset link to your email</div>
+      <div class="auth-err"    id="forgot-err"></div>
+      <div class="auth-success" id="forgot-ok"></div>
+      <input class="auth-input" id="forgot-email" type="email" placeholder="Your email address"/>
+      <button class="auth-btn auth-btn-primary" onclick="doForgotPassword()">Send Reset Link</button>
+      <div class="auth-switch"><a onclick="showSignIn()">← Back to sign in</a></div>
+    </div>
+
+    <!-- Onboarding Panel for Google OAuth -->
+    <div id="auth-onboarding" style="display:none">
+      <div style="text-align:center; margin-bottom:16px;">
+        <div style="width:52px; height:52px; margin:0 auto 10px; border-radius:50%; background:linear-gradient(135deg, rgba(96,165,250,0.2), rgba(167,139,250,0.2)); border:2px solid rgba(167,139,250,0.4); display:flex; align-items:center; justify-content:center; font-size:24px; overflow:hidden;" id="onboard-avatar-wrap">
+          👋
+        </div>
+        <div class="auth-title" style="font-size:20px;" id="onboard-title">Complete Account Setup</div>
+        <div class="auth-sub" style="margin-bottom:14px; font-size:12.5px;" id="onboard-subtitle">Personalize your Zero-Trust workspace and configure sign-in options.</div>
+      </div>
+
+      <div class="auth-err" id="onboard-err"></div>
+
+      <!-- Profile Section -->
+      <div style="margin-bottom:12px;">
+        <label style="display:block; font-size:12px; font-weight:600; color:var(--t2); margin-bottom:4px; text-align:left;">Full Name</label>
+        <input class="auth-input" id="onboard-name" type="text" placeholder="Your name" autocomplete="name" style="margin-bottom:8px;"/>
+      </div>
+
+      <div style="margin-bottom:12px;">
+        <label style="display:block; font-size:12px; font-weight:600; color:var(--t2); margin-bottom:4px; text-align:left;">Organization / Department (Optional)</label>
+        <input class="auth-input" id="onboard-org" type="text" placeholder="e.g. Parul Univ / SecOps / Individual" style="margin-bottom:8px;"/>
+      </div>
+
+      <!-- Password Backup Section (Collapsible) -->
+      <div style="background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:12px; padding:12px 14px; margin-bottom:14px; text-align:left;">
+        <div style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="toggleOnboardPasswordSection()">
+          <div>
+            <div style="font-size:13px; font-weight:600; color:var(--t1); display:flex; align-items:center; gap:6px;">
+              <span>🔑</span> Set Password for Dual Access
+              <span style="font-size:10px; padding:1px 6px; border-radius:4px; background:rgba(99,102,241,0.18); color:#a5b4fc; border:1px solid rgba(99,102,241,0.35);">Optional</span>
+            </div>
+            <div style="font-size:11.5px; color:var(--t3); margin-top:2px;">Allows direct email + password sign-in alongside Google</div>
+          </div>
+          <span id="onboard-pw-chevron" style="color:var(--t3); font-size:12px; transition:transform .2s;">▼</span>
+        </div>
+
+        <div id="onboard-pw-fields" style="display:none; margin-top:10px; border-top:1px solid var(--border); padding-top:10px;">
+          <div class="auth-pw-wrap">
+            <input class="auth-input" id="onboard-password" type="password" placeholder="Create password (min 8 chars, 1 uppercase)" autocomplete="new-password" style="margin-bottom:8px;"/>
+            <button type="button" class="pw-eye-btn" onclick="togglePwVis(this)" tabindex="-1" aria-label="Toggle password visibility">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+          <div class="auth-pw-wrap">
+            <input class="auth-input" id="onboard-confirm" type="password" placeholder="Confirm password" autocomplete="new-password" style="margin-bottom:4px;"/>
+            <button type="button" class="pw-eye-btn" onclick="togglePwVis(this)" tabindex="-1" aria-label="Toggle password visibility">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Zero-Trust Consent -->
+      <label style="display:flex; align-items:flex-start; gap:8px; margin-bottom:14px; cursor:pointer; font-size:11.5px; color:var(--t2); text-align:left;">
+        <input type="checkbox" id="onboard-agree-terms" checked style="accent-color:var(--purple); margin-top:2px; cursor:pointer;">
+        <span>I agree to SecureMail's <a href="terms.html" target="_blank" style="color:#818cf8; text-decoration:none;">Terms of Service</a> & <a href="privacy.html" target="_blank" style="color:#818cf8; text-decoration:none;">Privacy Policy</a>, consenting to Zero-Trust scanning protocols.</span>
+      </label>
+
+      <!-- Action Buttons -->
+      <button class="auth-btn auth-btn-primary" id="onboard-submit-btn" onclick="submitOnboarding()">Complete Setup & Launch</button>
+      <div style="text-align:center; margin-top:6px;">
+        <button type="button" class="btn btn-secondary" style="background:transparent; border:none; color:var(--t3); font-size:12px; cursor:pointer;" onclick="skipOnboarding()">Skip optional setup & continue →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Standalone Trial Screen ────────────────────────────────── -->
+<div id="trial-screen" style="display:none; min-height:100vh; background:var(--bg); padding:24px 16px;">
+  <div style="max-width:800px; margin:0 auto;" class="fu">
+    <!-- Trial Header -->
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; flex-wrap:wrap; gap:12px;">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <div class="sb-logo-img-wrap" style="width:36px; height:36px;">
+            <img src="logo.png" alt="SecureMail Logo" style="width:100%; height:100%; object-fit:contain; display:block;">
+          </div>
+          <span class="sb-logo-name" style="background:linear-gradient(135deg, #60a5fa, #a78bfa, #f472b6); -webkit-background-clip:text; -webkit-text-fill-color:transparent; font-weight:800; font-size:18px; letter-spacing:-0.4px;">SecureMail Scanner</span>
+        </div>
+      </div>
+      <div style="display:flex; align-items:center; gap:10px;">
+        <button class="btn btn-secondary" onclick="showAuthScreen(); showSignIn();" style="font-size:12.5px;">Sign In</button>
+        <button class="btn btn-primary" onclick="showAuthScreen(); showSignUp();" style="font-size:12.5px;">Sign Up</button>
+      </div>
+    </div>
+
+    <!-- Trial Quota Banner -->
+    <div id="trial-quota-banner" style="background:rgba(99,102,241,0.1); border:1px solid rgba(99,102,241,0.3); border-radius:var(--r-sm); padding:12px 16px; margin-bottom:20px; text-align:center; font-size:13px; font-weight:600; color:var(--t1);">
+      Loading free trial scan quota...
+    </div>
+
+    <!-- Trial Scanner Card -->
+    <div class="card card-p">
+      <div style="font-size:15px; font-weight:700; color:var(--t1); margin-bottom:14px;">Instant Threat Scanner</div>
+      <p style="font-size:12.5px; color:var(--t2); margin-bottom:16px;">
+        Paste email headers, raw email body, or enter a URL below to test SecureMail's threat detection pipeline.
+      </p>
+
+      <div style="display:flex; gap:10px; margin-bottom:14px;">
+        <button class="btn btn-secondary active" id="trial-tab-email" onclick="switchTrialTab('email')">Email Content</button>
+        <button class="btn btn-secondary" id="trial-tab-url" onclick="switchTrialTab('url')">URL Check</button>
+      </div>
+
+      <!-- Email Input Tab -->
+      <div id="trial-input-email">
+        <textarea id="trial-email-text" class="settings-input" style="width:100%; height:160px; font-family:monospace; font-size:12px; margin-bottom:14px;" placeholder="Paste raw email content or email headers here..."></textarea>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <button class="btn btn-secondary" onclick="loadTrialSampleEmail()">Load Sample Phishing Email</button>
+          <button class="btn btn-primary" id="trial-btn-scan-email" onclick="doTrialScan('email')">Scan Email Now</button>
+        </div>
+      </div>
+
+      <!-- URL Input Tab -->
+      <div id="trial-input-url" style="display:none;">
+        <input type="text" id="trial-url-text" class="settings-input" style="width:100%; margin-bottom:14px;" placeholder="https://example-suspicious-domain.com/login">
+        <div style="display:flex; justify-content:flex-end;">
+          <button class="btn btn-primary" id="trial-btn-scan-url" onclick="doTrialScan('url')">Scan URL Now</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Trial Scan Result Container -->
+    <div id="trial-scan-result" style="margin-top:20px;"></div>
+  </div>
+</div>
+
+<div id="app" style="display:none">
+
+<!-- ── Sidebar ───────────────────────────────── -->
+<nav id="sidebar">
+  <a class="sb-logo" href="#" onclick="nav('dashboard');return false" style="display:flex; align-items:center; gap:12px; padding:18px 16px; border-bottom:1px solid var(--border); text-decoration:none;">
+    <div class="sb-logo-img-wrap">
+      <img src="logo.png" alt="SecureMail Logo" style="width:100%; height:100%; object-fit:contain; display:block;">
+    </div>
+    <div style="display:flex; align-items:baseline; gap:6px;">
+      <span class="sb-logo-name" style="background:linear-gradient(135deg, #60a5fa, #a78bfa, #f472b6); -webkit-background-clip:text; -webkit-text-fill-color:transparent; font-weight:800; font-size:16px; letter-spacing:-0.4px;">SecureMail</span>
+      <span class="sb-logo-ver" style="font-size:10px; font-weight:700; background:linear-gradient(135deg, rgba(99,102,241,0.25), rgba(168,85,247,0.25)); color:#c084fc; border:1px solid rgba(168,85,247,0.45); border-radius:4px; padding:2px 6px; box-shadow:0 0 10px rgba(168,85,247,0.3);">v4.0</span>
+    </div>
+  </a>
+
+  <div class="sb-nav">
+    <div class="sb-section">Main</div>
+    <button class="nav-item" id="nav-dashboard" onclick="nav('dashboard')">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
+      Dashboard
+    </button>
+    <button class="nav-item active" id="nav-scan" onclick="nav('scan')">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9.5 12l1.75 1.75L15 10"/></svg>
+      Email Scanner
+    </button>
+    <button class="nav-item" id="nav-threats" onclick="nav('threats')">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/><circle cx="12" cy="12" r="4"/></svg>
+      Threat Analysis
+    </button>
+
+    <div class="sb-divider"></div>
+    <div class="sb-section">Forensics & Intelligence</div>
+    <button class="nav-item" id="nav-threat-intel" onclick="nav('threat-intel')">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><circle cx="12" cy="11" r="3"/><path d="M12 2v4M12 18v4"/></svg>
+      Threat Vault
+    </button>
+    <button class="nav-item" id="nav-forensics" onclick="nav('forensics')">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 13h6M9 17h4"/></svg>
+      Forensic Logs
+    </button>
+    <button class="nav-item" id="nav-audit-trail" onclick="nav('audit-trail')">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+      Audit Trail
+    </button>
+    <button class="nav-item" id="nav-org-management" onclick="nav('org-management')">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      Team Sandbox
+      <span class="tag tag-clean" style="font-size:9px; padding:1px 5px; margin-left:auto; font-weight:700;">SOC</span>
+    </button>
+    <button class="nav-item" id="nav-headers" onclick="nav('headers')">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/><line x1="14" y1="4" x2="10" y2="20"/></svg>
+      Header Analysis
+    </button>
+
+    <div class="sb-divider"></div>
+    <div class="sb-section">Tools</div>
+    <button class="nav-item" id="nav-extension" onclick="nav('extension')">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l7.29-7.29c.94-.94.94-2.48 0-3.42L12 2z"/><circle cx="7" cy="7" r="1.5"/></svg>
+      Browser Extension
+    </button>
+    <button class="nav-item" id="nav-settings" onclick="nav('settings')">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      Settings
+    </button>
+    <button class="nav-item" id="nav-account" onclick="nav('account')">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      Account
+    </button>
+    <div class="sb-divider"></div>
+    <div class="sb-section">Appearance</div>
+    <button class="nav-item" id="btn-theme-toggle" onclick="toggleTheme()">
+      <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+      </svg>
+      <span id="theme-text">Light Theme</span>
+    </button>
+  </div>
+  <!-- User widget -->
+  <div class="sidebar-user" id="sidebar-user">
+    <div class="user-avatar" id="user-avatar-wrap">
+      <span id="user-initials">?</span>
+    </div>
+    <div class="user-info">
+      <div style="display:flex;align-items:center;gap:6px">
+        <div class="user-name" id="user-display-name">Loading...</div>
+        <span class="tag tag-critical" id="sidebar-role-badge" style="font-size:9.5px;padding:1px 5px;text-transform:uppercase;font-weight:700">ADMIN</span>
+      </div>
+      <div class="user-email" id="user-display-email"></div>
+    </div>
+    <button class="signout-btn" onclick="doSignOut()" title="Sign out">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+        <polyline points="16 17 21 12 16 7"/>
+        <line x1="21" y1="12" x2="9" y2="12"/>
+      </svg>
+    </button>
+  </div>
+  <!-- Guest sign-in widget (shown when not logged in) -->
+  <div class="sidebar-guest" id="sidebar-guest">
+    <button class="btn btn-primary" onclick="showAuthScreen(); showSignIn();" style="width:100%;">Sign In</button>
+    <button class="btn btn-secondary" onclick="showAuthScreen(); showSignUp();" style="width:100%; margin-top:6px;">Create Free Account</button>
+  </div>
+</nav>
+
+<!-- ── Main ──────────────────────────────────── -->
+<div id="main">
+  <!-- Topbar -->
+  <header id="topbar">
+    <div class="topbar-title" id="topbar-title">Dashboard</div>
+    <div class="topbar-right">
+      <button class="live-threats-btn" onclick="nav('threats')">
+        <div class="threat-dot"></div>
+        <span id="threats-today-count">0 Live threats</span>
+      </button>
+    </div>
+  </header>
+
+  <div id="content">
+
+    <!-- ═══ DASHBOARD ═══ -->
+    <div class="page active" id="page-dashboard">
+      <!-- Stat cards -->
+      <div class="dash-stats fu">
+        <div class="stat-card">
+          <div class="stat-icon" style="background:var(--cyan-dim)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+          </div>
+          <div class="stat-lbl">Emails scanned</div>
+          <div class="stat-val" id="ov-total">—</div>
+          <div class="stat-sub" id="ov-today">Loading…</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon" style="background:var(--red-dim)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          </div>
+          <div class="stat-lbl">Threats found</div>
+          <div class="stat-val" style="color:var(--red)" id="ov-threats">—</div>
+          <div class="stat-sub" id="ov-critical-sub">Loading…</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon" style="background:var(--amber-dim)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="var(--amber)" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+          </div>
+          <div class="stat-lbl">Attachments</div>
+          <div class="stat-val" style="color:var(--amber)" id="ov-attach">—</div>
+          <div class="stat-sub" id="ov-attach-sub">scanned</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon" style="background:var(--green-dim)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+          </div>
+          <div class="stat-lbl">Links checked</div>
+          <div class="stat-val" style="color:var(--green)" id="ov-links">—</div>
+          <div class="stat-sub" id="ov-links-sub">all time</div>
+        </div>
+      </div>
+
+      <!-- Recent threats + Breakdown -->
+      <div class="two-col fu d1">
+        <!-- Recent threats feed -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              Recent threats
+            </div>
+            <div class="live-badge"><div class="live-dot"></div>Live</div>
+          </div>
+          <div id="recent-threats-list">
+            <div style="padding:32px;text-align:center;color:var(--t3);font-size:13px">Loading recent threats…</div>
+          </div>
+        </div>
+
+        <!-- Threat breakdown -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>
+              Threat breakdown
+            </div>
+          </div>
+          <div class="card-p" id="threat-breakdown">
+            <div style="color:var(--t3);font-size:13px">Loading…</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ EMAIL SCANNER ═══ -->
+    <div class="page" id="page-scan" style="padding:0;height:calc(100vh - 57px)">
+      <div class="scanner-wrap" style="margin:0;height:100%">
+
+        <!-- Left: input panel -->
+        <div class="scan-panel" style="border-radius:0;border-top:none;border-left:none;border-bottom:none">
+          <div class="scan-panel-header">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+            Paste email / .eml
+          </div>
+          <div class="scan-panel-body">
+            <!-- Guest quota banner -->
+            <div class="guest-quota-banner" id="scan-quota-banner" style="display:none">
+              <img src="logo.png" alt="SecureMail">
+              <span id="scan-quota-text">Loading scan quota...</span>
+            </div>
+
+            <!-- Info banner -->
+            <div class="alert-banner alert-amber fu" style="margin-bottom:14px">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              Paste raw email (.eml), upload an attachment, or enter a URL to scan. Supports Gmail and Outlook formats.
+            </div>
+
+            <!-- Drop zone -->
+            <div class="drop-zone" id="email-drop" onclick="document.getElementById('eml-file').click()">
+              <input type="file" id="eml-file" accept=".eml,.msg,.txt" style="display:none" onchange="handleEmlFile(event)"/>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              <h3>Drop .eml file here or paste raw email</h3>
+              <p>Gmail Export, Outlook .msg, raw headers accepted</p>
+            </div>
+
+            <textarea id="email-input" placeholder="Or paste raw email text here…
+From: Security Operations <alerts@security-audit.internal>
+Subject: Urgent: Security Verification Notice
+Authentication-Results: spf=fail; dkim=fail; dmarc=fail" style="width:100%;min-height:130px;resize:vertical;background:rgba(0,0,0,0.2);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--t1);font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.6;padding:12px;outline:none;transition:all 0.18s;display:block;margin-bottom:12px"></textarea>
+
+            <!-- Inspection Depth Selector (Quick <0.2s vs Deep 87+ VT Engines) -->
+            <div style="display:flex;align-items:center;justify-content:space-between;background:rgba(15,23,42,0.6);border:1px solid var(--border);border-radius:var(--r-sm);padding:8px 12px;margin-bottom:12px;gap:10px;flex-wrap:wrap">
+              <div style="display:flex;align-items:center;gap:8px">
+                <span id="scan-mode-icon" style="font-size:16px">⚡</span>
+                <div>
+                  <div style="font-size:12px;font-weight:700;color:var(--t1)">Inspection Depth</div>
+                  <div style="font-size:10.5px;color:var(--t3)" id="scan-mode-desc">Quick Scan: Instant heuristic, ML classifier &amp; Threat Vault (&lt;200ms)</div>
+                </div>
+              </div>
+              <div style="display:inline-flex;background:rgba(0,0,0,0.4);padding:3px;border-radius:6px;border:1px solid rgba(255,255,255,0.08);gap:4px">
+                <button type="button" id="btn-mode-quick" onclick="setScanMode('quick')" class="scan-mode-btn" style="padding:4px 10px;font-size:11.5px;font-weight:600;border-radius:4px;border:none;cursor:pointer;display:flex;align-items:center;gap:5px;transition:all 0.15s;background:var(--accent);color:#fff">
+                  <span>⚡</span> Quick (&lt;0.2s)
+                </button>
+                <button type="button" id="btn-mode-deep" onclick="setScanMode('deep')" class="scan-mode-btn" style="padding:4px 10px;font-size:11.5px;font-weight:600;border-radius:4px;border:none;cursor:pointer;display:flex;align-items:center;gap:5px;transition:all 0.15s;background:transparent;color:var(--t2)">
+                  <span>🛡️</span> Deep (87+ VT Engines)
+                </button>
+              </div>
+            </div>
+
+            <div style="display:flex;gap:8px;margin-bottom:16px">
+              <button class="btn btn-secondary" style="font-size:12px;padding:7px 14px" onclick="clearScan()">Clear</button>
+              <button class="btn btn-primary" onclick="scanEmail()" id="main-scan-btn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <span id="scan-btn-label">Quick Scan</span>
+              </button>
+            </div>
+
+            <!-- URL section -->
+            <div class="url-section">
+              <div class="url-section-title">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                URL / Link scanner
+              </div>
+              <div class="url-input-row">
+                <input id="url-quick" type="url" placeholder="https://suspicious-site.com"/>
+                <button class="btn btn-primary btn-sm" onclick="quickUrlScan()">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                  Check
+                </button>
+              </div>
+              <div class="url-input-row">
+                <input id="attach-quick-name" type="text" placeholder="Attachment hash or filename"/>
+                <button class="btn btn-secondary btn-sm" onclick="document.getElementById('attach-quick-file').click()">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                  Lookup
+                </button>
+                <input type="file" id="attach-quick-file" style="display:none" onchange="quickAttachScan(event)"/>
+              </div>
+              <div class="loader-row" id="url-loader"><div class="spinner"></div><span>Scanning…</span></div>
+              <div class="err" id="url-err"></div>
+              <div id="url-quick-result" style="display:none;margin-top:10px"></div>
+            </div>
+
+            <div class="loader-row" id="scan-loader" style="margin-top:12px"><div class="spinner"></div><span id="scan-loader-text">Analyzing email…</span></div>
+            <div class="err" id="scan-err"></div>
+
+            <div style="margin-top:14px;display:flex;gap:8px">
+              <button class="btn btn-secondary btn-sm" onclick="runDemo(false)" title="Instant heuristic demo">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                Demo (Quick)
+              </button>
+              <button class="btn btn-secondary btn-sm" onclick="runDemo(true)" title="Deep multi-engine VirusTotal demo">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                Demo (Deep VT)
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: results panel -->
+        <div class="scan-panel" style="border-radius:0;border-top:none;border-right:none;border-bottom:none">
+          <div class="scan-panel-header">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+            Scan result
+          </div>
+          <div class="scan-panel-body" id="scan-result-panel">
+            <div class="result-ready">
+              <img src="logo.png" alt="Ready" style="width:54px;height:54px;opacity:0.22;border-radius:10px;object-fit:contain;filter:grayscale(30%)">
+              <p>Ready to scan</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ THREAT ANALYSIS ═══ -->
+    <div class="page" id="page-threats">
+      <div id="threat-alert-banner" class="alert-banner alert-red fu" style="display:none">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        <span id="threat-alert-text"></span>
+      </div>
+      <div class="two-col fu d1">
+        <!-- Threat feed -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.1"/></svg>
+              Threat intelligence feed
+            </div>
+            <div id="threat-feed-count" class="tag tag-critical" style="display:none"></div>
+          </div>
+          <div id="threat-feed-list">
+            <div style="padding:32px;text-align:center;color:var(--t3);font-size:13px">Loading threat feed…</div>
+          </div>
+        </div>
+
+        <!-- Quick scanners -->
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <!-- URL scan -->
+          <div class="card card-p">
+            <div class="card-title" style="margin-bottom:12px">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+              URL Reputation Check
+            </div>
+            <div class="url-input-row">
+              <input id="ta-url" type="url" placeholder="https://suspicious.com"/>
+              <button class="btn btn-primary btn-sm" onclick="taUrlScan()">Scan</button>
+            </div>
+            <div class="loader-row" id="ta-url-loader"><div class="spinner"></div><span>Scanning…</span></div>
+            <div class="err" id="ta-url-err"></div>
+            <div id="ta-url-res" style="display:none;margin-top:10px"></div>
+          </div>
+
+          <!-- IP check -->
+          <div class="card card-p">
+            <div class="card-title" style="margin-bottom:12px">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+              IP Reputation Check
+            </div>
+            <div class="url-input-row">
+              <input id="ta-ip" type="text" placeholder="185.234.218.47"/>
+              <button class="btn btn-primary btn-sm" onclick="taIpScan()">Check</button>
+            </div>
+            <div class="loader-row" id="ta-ip-loader"><div class="spinner"></div><span>Checking…</span></div>
+            <div class="err" id="ta-ip-err"></div>
+            <div id="ta-ip-res" style="display:none;margin-top:10px"></div>
+          </div>
+
+          <!-- Attachment -->
+          <div class="card card-p">
+            <div class="card-title" style="margin-bottom:12px">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+              Attachment Hash Check
+            </div>
+            <div class="drop-zone" style="padding:20px" id="ta-drop" onclick="document.getElementById('ta-file').click()">
+              <input type="file" id="ta-file" style="display:none" onchange="taFileScan(event)"/>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:24px;height:24px;margin-bottom:6px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              <h3 style="font-size:13px">Drop file or click to browse</h3>
+            </div>
+            <div class="loader-row" id="ta-file-loader"><div class="spinner"></div><span>Checking hash…</span></div>
+            <div class="err" id="ta-file-err"></div>
+            <div id="ta-file-res" style="display:none;margin-top:10px"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ THREAT VAULT & INTELLIGENCE ═══ -->
+    <div class="page" id="page-threat-intel">
+      <div class="sec-hdr fu">
+        <div>
+          <h2>Threat Intelligence Vault</h2>
+          <p style="color:var(--t2);font-size:13px;margin-top:2px">Global threat feed synchronization, sub-millisecond IOC lookup & perimeter blocklists</p>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-secondary btn-sm" onclick="exportThreatVaultCSV()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Export Blocklist (CSV)
+          </button>
+          <button class="btn btn-secondary btn-sm" onclick="exportThreatVaultJSON()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Export JSON
+          </button>
+          <button class="btn btn-primary btn-sm" id="btn-sync-feeds" onclick="triggerThreatFeedSync()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.1"/></svg>Sync Feeds Now
+          </button>
+        </div>
+      </div>
+
+      <!-- Feed Metric Cards -->
+      <div class="dash-stats fu d1" style="grid-template-columns:repeat(4,1fr)">
+        <div class="stat-card">
+          <div class="stat-lbl">Active Indicators</div>
+          <div class="stat-val" id="ti-total-iocs" style="color:var(--cyan)">—</div>
+          <div style="font-size:11px;color:var(--t3);margin-top:4px">Indexed in SQLite WAL</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-lbl" style="color:#f43f5e">URLhaus Malware Feeds</div>
+          <div class="stat-val" id="ti-urlhaus-count" style="color:#f43f5e">—</div>
+          <div style="font-size:11px;color:var(--t3);margin-top:4px" id="ti-urlhaus-status">Status: Checking…</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-lbl" style="color:#eab308">OpenPhish Stream</div>
+          <div class="stat-val" id="ti-openphish-count" style="color:#eab308">—</div>
+          <div style="font-size:11px;color:var(--t3);margin-top:4px" id="ti-openphish-status">Status: Checking…</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-lbl" style="color:var(--green)">Sub-ms Memory Cache</div>
+          <div class="stat-val" id="ti-cache-count" style="color:var(--green)">—</div>
+          <div style="font-size:11px;color:var(--t3);margin-top:4px">&lt; 0.1ms Instant Lookup</div>
+        </div>
+      </div>
+
+      <!-- Instant IOC Sandbox Investigation Widget -->
+      <div class="card card-p fu d2" style="margin-bottom:14px;background:linear-gradient(180deg, rgba(30,41,59,0.5), rgba(15,23,42,0.6));border:1px solid rgba(56,189,248,0.2)">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <div style="font-size:13px;font-weight:700;color:var(--t1);display:flex;align-items:center;gap:6px">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            Instant Threat Reputation Sandbox
+          </div>
+          <span style="font-size:11px;color:var(--t3)">Query any IP, Domain, URL, or SHA-256 Hash</span>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <input type="text" id="ti-sandbox-input" placeholder="e.g. 198.51.100.25, suspicious-domain.com, or file hash..." style="flex:1;min-width:260px;background:rgba(0,0,0,0.25);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--t1);font-family:'JetBrains Mono',monospace;font-size:12px;padding:9px 12px;outline:none" onkeydown="if(event.key==='Enter')doInstantIOCLookup()"/>
+          <button class="btn btn-primary" onclick="doInstantIOCLookup()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>Lookup Reputation
+          </button>
+        </div>
+        <div id="ti-sandbox-result" style="display:none;margin-top:12px;padding:12px 14px;border-radius:var(--r-sm);font-size:12px;transition:all 0.2s"></div>
+      </div>
+
+      <!-- Threat Vault Search & Multi-Filter Bar -->
+      <div class="filter-bar fu d2">
+        <input type="text" id="ti-search-input" placeholder="Search indicator, tag (e.g. emotet, paypal), or payload..." oninput="debounceThreatSearch()" style="flex:2;min-width:200px"/>
+        <select id="ti-filter-type" onchange="fetchThreatVaultRecords(1)">
+          <option value="">All IOC Types</option>
+          <option value="url">URLs</option>
+          <option value="domain">Domains</option>
+          <option value="ip">IP Addresses</option>
+          <option value="sha256">SHA-256 Hashes</option>
+        </select>
+        <select id="ti-filter-threat" onchange="fetchThreatVaultRecords(1)">
+          <option value="">All Threat Categories</option>
+          <option value="phishing">Phishing</option>
+          <option value="malware_download">Malware Download</option>
+          <option value="c2">C2 / Botnet Relay</option>
+        </select>
+        <select id="ti-filter-feed" onchange="fetchThreatVaultRecords(1)">
+          <option value="">All Source Feeds</option>
+          <option value="urlhaus">URLhaus (Abuse.ch)</option>
+          <option value="openphish">OpenPhish</option>
+          <option value="abuseipdb">AbuseIPDB</option>
+          <option value="internal_seed">Curated Threat Vault</option>
+        </select>
+      </div>
+
+      <!-- Threat Indicators Table -->
+      <div class="card fu d3">
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr>
+              <th>Indicator (Defanged)</th><th>Type</th><th>Threat Category</th>
+              <th>Source Feed</th><th>Confidence</th><th>Threat Tags</th><th>Last Seen</th><th>Actions</th>
+            </tr></thead>
+            <tbody id="ti-tbody"><tr><td colspan="8" style="text-align:center;padding:32px;color:var(--t3)">Loading Threat Intelligence Vault…</td></tr></tbody>
+          </table>
+        </div>
+        <div class="pagination" id="ti-pagination"></div>
+      </div>
+    </div>
+
+    <!-- ═══ FORENSICS ═══ -->
+    <div class="page" id="page-forensics">
+      <div class="sec-hdr fu">
+        <div><h2>Forensic Threat Logs</h2><p style="color:var(--t2);font-size:13px;margin-top:2px">Historical scan records</p></div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-secondary btn-sm" onclick="exportForensics('json')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>JSON
+          </button>
+          <button class="btn btn-secondary btn-sm" onclick="exportForensics('csv')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>CSV
+          </button>
+          <button class="btn btn-primary btn-sm" onclick="loadForensics()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.1"/></svg>Refresh
+          </button>
+        </div>
+      </div>
+      <div class="dash-stats fu d1" style="grid-template-columns:repeat(4,1fr)">
+        <div class="stat-card"><div class="stat-lbl">Total Scans</div><div class="stat-val" id="f-total">—</div></div>
+        <div class="stat-card"><div class="stat-lbl" style="color:var(--red)">Critical</div><div class="stat-val" style="color:var(--red)" id="f-crit">—</div></div>
+        <div class="stat-card"><div class="stat-lbl" style="color:var(--orange)">High</div><div class="stat-val" style="color:var(--orange)" id="f-high">—</div></div>
+        <div class="stat-card"><div class="stat-lbl" style="color:var(--green)">Clean</div><div class="stat-val" style="color:var(--green)" id="f-clean">—</div></div>
+      </div>
+      <div class="filter-bar fu d2">
+        <input type="text" id="f-search" placeholder="Search sender, subject…" oninput="filterLogs()"/>
+        <select id="f-risk" onchange="filterLogs()">
+          <option value="">All Risk Levels</option>
+          <option value="critical">Critical</option>
+          <option value="high">High</option>
+          <option value="medium">Medium</option>
+          <option value="low">Low</option>
+          <option value="clean">Clean</option>
+        </select>
+      </div>
+      <div class="card fu d3">
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr>
+              <th>Scanned At</th><th>Sender</th><th>Subject</th>
+              <th>Score</th><th>Risk</th><th>Threats</th><th>Actions</th>
+            </tr></thead>
+            <tbody id="f-tbody"><tr><td colspan="7" style="text-align:center;padding:32px;color:var(--t3)">Loading…</td></tr></tbody>
+          </table>
+        </div>
+        <div class="pagination" id="f-pag"></div>
+      </div>
+    </div>
+
+    <!-- ═══ SOC COMPLIANCE AUDIT TRAIL ═══ -->
+    <div class="page" id="page-audit-trail">
+      <div class="sec-hdr fu">
+        <div>
+          <h2>Compliance Audit Trail</h2>
+          <p style="color:var(--t2);font-size:13px;margin-top:2px">Immutable SOC compliance log recording scans, PDF exports, deletions, and administrative actions</p>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-secondary btn-sm" onclick="exportAuditTrailCSV()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Export Compliance CSV
+          </button>
+          <button class="btn btn-primary btn-sm" onclick="loadAuditTrailPage()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.1"/></svg>Refresh
+          </button>
+        </div>
+      </div>
+
+      <!-- Multi-Filter Bar -->
+      <div class="filter-bar fu d1" style="display:flex;gap:12px;flex-wrap:wrap">
+        <input type="text" id="at-search-input" placeholder="Search actor email, IP address, resource ID…" oninput="debounceAuditSearch()" style="flex:2;min-width:240px"/>
+        <select id="at-filter-event" onchange="fetchAuditLogs(1)" style="flex:1;min-width:180px">
+          <option value="">All Event Types</option>
+          <option value="SCAN_EMAIL">SCAN_EMAIL</option>
+          <option value="SCAN_URL">SCAN_URL</option>
+          <option value="PDF_REPORT_EXPORT">PDF_REPORT_EXPORT</option>
+          <option value="LOG_DELETE">LOG_DELETE</option>
+          <option value="API_KEY_CREATE">API_KEY_CREATE</option>
+          <option value="API_KEY_REVOKE">API_KEY_REVOKE</option>
+          <option value="ROLE_ASSIGN">ROLE_ASSIGN</option>
+          <option value="FEED_SYNC">FEED_SYNC</option>
+          <option value="USER_LOGIN">USER_LOGIN</option>
+        </select>
+      </div>
+
+      <!-- Audit Events Table -->
+      <div class="card fu d2">
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr>
+              <th>Timestamp (UTC)</th>
+              <th>Event Type</th>
+              <th>Actor (Email / Role)</th>
+              <th>Originating IP</th>
+              <th>Target Resource</th>
+              <th>Event Details / Telemetry</th>
+            </tr></thead>
+            <tbody id="at-tbody"><tr><td colspan="6" style="text-align:center;padding:32px;color:var(--t3)">Loading Compliance Audit Trail…</td></tr></tbody>
+          </table>
+        </div>
+        <div class="pagination" id="at-pagination"></div>
+      </div>
+    </div>
+
+    <!-- ═══ HEADER ANALYSIS ═══ -->
+    <div class="page" id="page-headers">
+      <div class="sec-hdr fu"><div><h2>Header Analysis</h2><p style="color:var(--t2);font-size:13px;margin-top:2px">Inspect routing, authentication, and sender anomalies</p></div></div>
+      <div class="card card-p fu d1" style="margin-bottom:14px">
+        <textarea id="hdr-input" placeholder="Received: from mail.evil.ru&#10;From: Apple Support <noreply@mail2036.xyz>&#10;Authentication-Results: spf=fail; dkim=none; dmarc=fail" style="width:100%;min-height:140px;resize:vertical;background:rgba(0,0,0,0.2);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--t1);font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.6;padding:12px;outline:none;transition:all 0.18s"></textarea>
+        <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+          <button class="btn btn-primary" onclick="analyzeHeaders()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>Analyze Headers
+          </button>
+          <button class="btn btn-secondary" onclick="loadSampleHeaders()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>Load Sample Multi-Hop Headers
+          </button>
+          <div class="loader-row on" id="hdr-loader" style="display:none"><div class="spinner"></div><span>Analyzing…</span></div>
+        </div>
+        <div class="err" id="hdr-err"></div>
+      </div>
+      <div id="hdr-result" style="display:none">
+        <div class="two-col fu d2" style="margin-bottom:14px">
+          <div class="card card-p"><div class="card-title" style="margin-bottom:12px">Authentication</div><div id="ha-auth"></div></div>
+          <div class="card card-p"><div class="card-title" style="margin-bottom:12px">Sender Details</div><div id="ha-sender"></div></div>
+        </div>
+        <div class="card card-p fu d3" style="margin-bottom:14px"><div class="card-title" style="margin-bottom:12px">Routing & IP</div><div id="ha-meta"></div></div>
+
+        <!-- 🗺️ Interactive SMTP Hop & Geolocation Map -->
+        <div class="card card-p fu d4" id="hdr-map-card" style="display:none;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:8px;">
+            <div>
+              <div class="card-title" style="display:flex; align-items:center; gap:8px;">
+                <span>🗺️ SMTP Hop & Geolocation Relay Trajectory</span>
+              </div>
+              <p style="font-size:12px; color:var(--t2); margin-top:2px;">Physical mail server transit hops traced across continents</p>
+            </div>
+            <div style="display:flex; align-items:center; gap:12px; font-size:11.5px;">
+              <span style="display:flex; align-items:center; gap:5px;"><span style="width:10px; height:10px; border-radius:50%; background:#ef4444;"></span> Origin</span>
+              <span style="display:flex; align-items:center; gap:5px;"><span style="width:10px; height:10px; border-radius:50%; background:#3b82f6;"></span> Relay</span>
+              <span style="display:flex; align-items:center; gap:5px;"><span style="width:10px; height:10px; border-radius:50%; background:#10b981;"></span> Destination MX</span>
+            </div>
+          </div>
+
+          <!-- Trajectory Summary Banner -->
+          <div class="hdr-trajectory-banner" id="hdr-trajectory-banner"></div>
+
+          <!-- Leaflet Map Canvas -->
+          <div id="hdr-map"></div>
+
+          <!-- Chronological Stepper -->
+          <div style="margin-top:16px;">
+            <div style="font-size:12px; font-weight:700; color:var(--t2); text-transform:uppercase; letter-spacing:.05em; margin-bottom:8px;">
+              Chronological Relay Stepper (Click hop to focus map)
+            </div>
+            <div class="hdr-timeline-stepper" id="hdr-hop-timeline"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ EXTENSION ═══ -->
+    <div class="page" id="page-extension">
+      <div class="sec-hdr fu"><div><h2>Browser Extension</h2><p style="color:var(--t2);font-size:13px;margin-top:2px">One-click email threat detection in your browser</p></div></div>
+      
+      <!-- Direct Download Hero Banner -->
+      <div class="card card-p fu d1" style="margin-bottom:18px;background:linear-gradient(135deg,rgba(30,41,59,0.7),rgba(15,23,42,0.9));border:1px solid rgba(56,189,248,0.3);position:relative;overflow:hidden">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px">
+          <div style="max-width:540px">
+            <div style="display:inline-flex;align-items:center;gap:6px;background:rgba(56,189,248,0.1);border:1px solid rgba(56,189,248,0.3);color:var(--cyan);font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:10px">
+              <span>⚡</span> Direct Web Download (Pre-Configured)
+            </div>
+            <h3 style="font-size:18px;font-weight:700;margin-bottom:6px">Get the SecureMail Browser Extension</h3>
+            <p style="color:var(--t2);font-size:13px;line-height:1.5">
+              Protect your Gmail and Outlook inboxes directly in your browser. Download the pre-packaged extension zip below, or clone it from our GitHub repository.
+            </p>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <a href="securemail-extension.zip" download="securemail-extension.zip" class="btn btn-primary" style="padding:10px 18px;font-size:13px;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;gap:8px">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Download Extension (.zip)
+            </a>
+            <a href="https://github.com/samirkhurshid/SecureMail" target="_blank" rel="noopener noreferrer" class="btn btn-secondary" style="padding:10px 16px;font-size:13px;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;gap:8px">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+              GitHub Repository
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <div class="three-col fu d1" style="margin-bottom:14px">
+        <div class="card card-p" style="text-align:center">
+          <div style="width:52px;height:52px;background:linear-gradient(135deg,#4285f4,#34a853);border-radius:13px;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;box-shadow:0 0 18px rgba(66,133,244,0.3)">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="white"><circle cx="12" cy="12" r="10"/></svg>
+          </div>
+          <h3 style="font-size:14px;margin-bottom:7px">Chrome / Edge / Brave</h3>
+          <p style="color:var(--t2);font-size:12.5px;margin-bottom:14px">Load unpacked in 30 seconds</p>
+          <button class="btn btn-primary" style="width:100%;justify-content:center" onclick="showExtInst('chrome')">View Chrome Guide</button>
+        </div>
+        <div class="card card-p" style="text-align:center">
+          <div style="width:52px;height:52px;background:linear-gradient(135deg,#ff6900,#ff3750);border-radius:13px;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;box-shadow:0 0 18px rgba(255,105,0,0.3)">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/></svg>
+          </div>
+          <h3 style="font-size:14px;margin-bottom:7px">Firefox</h3>
+          <p style="color:var(--t2);font-size:12.5px;margin-bottom:14px">Load temporary add-on via about:debugging</p>
+          <button class="btn btn-secondary" style="width:100%;justify-content:center" onclick="showExtInst('firefox')">View Firefox Guide</button>
+        </div>
+        <div class="card card-p" style="text-align:center;opacity:0.6">
+          <div style="width:52px;height:52px;background:linear-gradient(135deg,var(--cyan),var(--purple));border-radius:13px;display:flex;align-items:center;justify-content:center;margin:0 auto 14px">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+          </div>
+          <h3 style="font-size:14px;margin-bottom:7px">Safari</h3>
+          <p style="color:var(--t2);font-size:12.5px;margin-bottom:14px">Coming in next release</p>
+          <button class="btn btn-secondary" style="width:100%;justify-content:center;cursor:not-allowed">Coming Soon</button>
+        </div>
+      </div>
+      <div class="card card-p fu d2" id="ext-inst-card" style="display:none;margin-bottom:14px">
+        <div class="card-title" style="margin-bottom:12px" id="ext-inst-title">Installation Steps</div>
+        <div id="ext-inst-body"></div>
+      </div>
+      <div class="card card-p fu d3">
+        <div class="card-title" style="margin-bottom:14px">What SecureMail Extension Does</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div class="url-item"><div style="font-size:13px;font-weight:600;margin-bottom:3px">⚡ One-Click Scan</div><div style="font-size:12px;color:var(--t2)">Right-click any email text in Gmail or Outlook to scan instantly.</div></div>
+          <div class="url-item"><div style="font-size:13px;font-weight:600;margin-bottom:3px">🔗 URL Guard</div><div style="font-size:12px;color:var(--t2)">Flags suspicious URLs before you click them.</div></div>
+          <div class="url-item"><div style="font-size:13px;font-weight:600;margin-bottom:3px">📋 Clipboard Scan</div><div style="font-size:12px;color:var(--t2)">Paste and analyze copied email content from the popup.</div></div>
+          <div class="url-item"><div style="font-size:13px;font-weight:600;margin-bottom:3px">🔔 Real-Time Alerts</div><div style="font-size:12px;color:var(--t2)">Badge turns red with threat count on detection.</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ SETTINGS ═══ -->
+    <div class="page" id="page-settings">
+      <div style="display:flex; flex-direction:column; gap:16px; max-width:800px; margin:0 auto;" class="fu">
+        
+        <!-- Scanning Preferences Card -->
+        <div class="card card-p">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+            <div style="color:var(--t2);">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+            </div>
+            <div style="font-size:14px; font-weight:700; color:var(--t1); letter-spacing:-0.2px;">Scanning preferences</div>
+          </div>
+          
+          <div class="settings-list">
+            <div class="settings-row-item">
+              <span class="settings-item-label">Deep attachment sandbox scan</span>
+              <label class="switch">
+                <input type="checkbox" id="pref-sandbox" onchange="saveSettings()">
+                <span class="slider-toggle"></span>
+              </label>
+            </div>
+            <div class="settings-row-item">
+              <span class="settings-item-label">VirusTotal API integration</span>
+              <label class="switch">
+                <input type="checkbox" id="pref-vt" onchange="saveSettings()">
+                <span class="slider-toggle"></span>
+              </label>
+            </div>
+            <div class="settings-row-item">
+              <span class="settings-item-label">Check URLs against threat intel DB</span>
+              <label class="switch">
+                <input type="checkbox" id="pref-url-db" onchange="saveSettings()">
+                <span class="slider-toggle"></span>
+              </label>
+            </div>
+            <div class="settings-row-item">
+              <span class="settings-item-label">Auto-generate forensic report</span>
+              <label class="switch">
+                <input type="checkbox" id="pref-report" onchange="saveSettings()">
+                <span class="slider-toggle"></span>
+              </label>
+            </div>
+            <div class="settings-row-item">
+              <span class="settings-item-label">Email risk score threshold alerts</span>
+              <label class="switch">
+                <input type="checkbox" id="pref-threshold" onchange="saveSettings()">
+                <span class="slider-toggle"></span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- API Integrations Card -->
+        <div class="card card-p">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+            <div style="color:var(--t2);">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+            </div>
+            <div style="font-size:14px; font-weight:700; color:var(--t1); letter-spacing:-0.2px;">API integrations</div>
+          </div>
+          
+          <div style="display:flex; flex-direction:column; gap:16px;">
+            <div class="api-grid-row">
+              <div class="api-label">VirusTotal API key</div>
+              <div class="api-control">
+                <input type="password" id="cfg-vt" class="settings-input" placeholder="Enter key..." onchange="saveSettings()">
+              </div>
+            </div>
+            <div class="api-grid-row">
+              <div class="api-label">AbuseIPDB key</div>
+              <div class="api-control">
+                <input type="password" id="cfg-abuse" class="settings-input" placeholder="Enter key..." onchange="saveSettings()">
+              </div>
+            </div>
+            <div class="api-grid-row">
+              <div class="api-label">Outlook OAuth</div>
+              <div class="api-control">
+                <button class="settings-action-btn" onclick="connectOutlook()">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px;"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                  Connect Outlook
+                </button>
+              </div>
+            </div>
+            <div class="api-grid-row" style="margin-top:8px">
+              <div class="api-label">Integration Diagnostics</div>
+              <div class="api-control">
+                <button class="btn btn-secondary btn-sm" id="test-apis-btn" onclick="testApiConnections()" style="width:100%;justify-content:center">
+                  ⚡ Test API Connections
+                </button>
+              </div>
+            </div>
+            <div id="api-test-results" style="display:none;padding:12px;background:rgba(0,0,0,0.2);border:1px solid var(--border);border-radius:var(--r-sm);margin-top:8px"></div>
+          </div>
+        </div>
+
+
+        <!-- Forensic Log Storage Card -->
+        <div class="card card-p">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+            <div style="color:var(--t2);">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/></svg>
+            </div>
+            <div style="font-size:14px; font-weight:700; color:var(--t1); letter-spacing:-0.2px;">Forensic log storage</div>
+          </div>
+          
+          <div class="storage-btn-row">
+            <button class="storage-btn" onclick="chooseLocalFolder()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2 2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+              Choose local folder
+            </button>
+            <button class="storage-btn" onclick="syncToCloud()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 10a5 5 0 0 0-9.54-1.54A6 6 0 0 0 6 20h11.5A5.5 5.5 0 0 0 22 14.5z"/></svg>
+              Sync to cloud
+            </button>
+            <button class="storage-btn" onclick="exportForensics('json')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Export all logs
+            </button>
+          </div>
+        </div>
+
+        <!-- Enterprise API Keys Management Card -->
+        <div class="card card-p">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <div style="color:var(--cyan);">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+              </div>
+              <div style="font-size:14px; font-weight:700; color:var(--t1); letter-spacing:-0.2px;">Programmatic API Keys</div>
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="openCreateAPIKeyModal()">
+              + Generate New Key
+            </button>
+          </div>
+          <p style="font-size:12px; color:var(--t2); margin-bottom:16px;">
+            Cryptographic keys for machine-to-machine integrations (Postfix MTA filters, SIEM pipelines, Wazuh, Splunk, CI/CD).
+          </p>
+          <div class="tbl-wrap" style="margin-top:8px;">
+            <table>
+              <thead><tr>
+                <th>Key Name</th>
+                <th>Prefix</th>
+                <th>Assigned Scopes</th>
+                <th>Usage Count</th>
+                <th>Last Active</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr></thead>
+              <tbody id="api-keys-tbody">
+                <tr><td colspan="7" style="text-align:center;padding:20px;color:var(--t3)">Loading API keys…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ═══ ACCOUNT ═══ -->
+    <div class="page" id="page-account">
+      <div style="display:flex; flex-direction:column; gap:16px; max-width:800px; margin:0 auto;" class="fu">
+
+        <!-- Profile Info Card -->
+        <div class="card card-p">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+            <div style="font-size:14px; font-weight:700; color:var(--t1); letter-spacing:-0.2px;">Account Profile</div>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span class="tag tag-clean" id="acc-verified-badge" style="font-size:10px; font-weight:700;">✓ EMAIL VERIFIED</span>
+              <span class="tag tag-info" id="acc-provider-badge">Email & Password</span>
+              <span class="tag tag-critical" id="acc-role-badge" style="font-size:10px; text-transform:uppercase; font-weight:700;">USER</span>
+            </div>
+          </div>
+
+          <div style="display:flex; align-items:center; gap:16px; margin-bottom:16px;">
+            <div class="user-avatar" id="acc-avatar-wrap" style="width:56px; height:56px; font-size:22px;">
+              <span id="acc-user-initials">U</span>
+            </div>
+            <div>
+              <div style="font-size:16px; font-weight:700; color:var(--t1);" id="acc-display-name">Loading...</div>
+              <div style="font-size:13px; color:var(--t2);" id="acc-email">loading@example.com</div>
+            </div>
+          </div>
+
+          <!-- Email Verification Action Banner (shown if unverified) -->
+          <div id="acc-verify-banner" style="display:none; margin-bottom:16px; padding:12px 14px; background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.35); border-radius:var(--r-sm); font-size:12.5px; color:var(--orange);">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+              <div>
+                <strong>⚠️ Email Not Verified:</strong> Please verify your email address to enable Slack webhooks, API keys, and account deletion.
+                <div style="font-size:11px; opacity:0.85; margin-top:3px;">(Note: It may take a few minutes after clicking your email link to update, or sign out and back in.)</div>
+              </div>
+              <button class="btn btn-secondary" style="padding:5px 12px; font-size:11.5px; border-color:rgba(245,158,11,0.4);" onclick="resendAccountVerification()">Resend Verification Email</button>
+            </div>
+          </div>
+
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; padding:12px; background:rgba(0,0,0,0.15); border:1px solid var(--border); border-radius:var(--r-sm); font-size:12.5px;">
+            <div><span style="color:var(--t3);">Account Created:</span> <strong id="acc-created-at" style="color:var(--t1); display:block; margin-top:2px;">-</strong></div>
+            <div><span style="color:var(--t3);">Last Sign-In:</span> <strong id="acc-last-login" style="color:var(--t1); display:block; margin-top:2px;">-</strong></div>
+          </div>
+
+          <div style="margin-top:16px; display:flex; justify-content:flex-end; gap:10px; flex-wrap:wrap;" id="acc-pw-actions-wrap">
+            <button class="btn btn-secondary" id="acc-btn-reset-pw" onclick="triggerPasswordReset()" style="display:none;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:6px;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              Send Password Reset Email
+            </button>
+            <button class="btn btn-secondary" id="acc-btn-set-pw" onclick="openSetPasswordModal()" style="display:none; border-color:rgba(129,140,248,0.5); color:#a5b4fc; background:rgba(99,102,241,0.08);">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:6px;"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              Set Password for Email Sign-In
+            </button>
+          </div>
+        </div>
+
+        <!-- Account Usage Statistics -->
+        <div class="card card-p">
+          <div style="font-size:14px; font-weight:700; color:var(--t1); margin-bottom:16px;">Security & Scan Usage</div>
+          <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:12px; text-align:center;">
+            <div style="padding:14px; background:var(--card-bg); border:1px solid var(--border); border-radius:var(--r-sm);">
+              <div style="font-size:22px; font-weight:800; color:var(--cyan);" id="acc-stat-total">0</div>
+              <div style="font-size:11.5px; color:var(--t3); text-transform:uppercase; margin-top:4px;">Total Scans</div>
+            </div>
+            <div style="padding:14px; background:var(--card-bg); border:1px solid var(--border); border-radius:var(--r-sm);">
+              <div style="font-size:22px; font-weight:800; color:var(--red);" id="acc-stat-threats">0</div>
+              <div style="font-size:11.5px; color:var(--t3); text-transform:uppercase; margin-top:4px;">Threats Detected</div>
+            </div>
+            <div style="padding:14px; background:var(--card-bg); border:1px solid var(--border); border-radius:var(--r-sm);">
+              <div style="font-size:22px; font-weight:800; color:var(--green);" id="acc-stat-clean">0</div>
+              <div style="font-size:11.5px; color:var(--t3); text-transform:uppercase; margin-top:4px;">Clean Scans</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Weekly Digest Email Preferences -->
+        <div class="card card-p">
+          <div style="font-size:14px; font-weight:700; color:var(--t1); margin-bottom:12px;">Weekly Threat Digest</div>
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+            <div>
+              <div style="font-size:13px; font-weight:600; color:var(--t1);">Receive Weekly Summary Emails</div>
+              <div style="font-size:12px; color:var(--t2); margin-top:2px;">Get a weekly report of scanned threats and security activity delivered to your inbox.</div>
+            </div>
+            <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+              <input type="checkbox" id="acc-digest-toggle" onchange="toggleDigestPreference(this.checked)" style="width:18px; height:18px; accent-color:var(--purple); cursor:pointer;">
+              <span style="font-size:13px; font-weight:600; color:var(--t1);">Enabled</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Webhook Alerts Card -->
+        <div class="card card-p">
+          <div style="font-size:14px; font-weight:700; color:var(--t1); margin-bottom:8px;">Slack & Webhook Alerts</div>
+          <p style="font-size:12.5px; color:var(--t2); margin-bottom:14px; line-height:1.5;">
+            Get notified immediately in Slack or any custom HTTP endpoint when a <strong>high or critical risk</strong> email is detected. Paste a Slack incoming webhook URL below.
+          </p>
+          <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:10px;">
+            <input type="text" id="acc-webhook-url" class="settings-input" placeholder="https://hooks.slack.com/services/..." style="flex:1; min-width:260px;">
+            <button class="btn btn-primary" onclick="saveWebhookUrl()">Save Webhook</button>
+            <button class="btn btn-secondary" onclick="testWebhookUrl()">Send Test Alert</button>
+          </div>
+        </div>
+
+        <!-- GDPR Data Export Card -->
+        <div class="card card-p">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+            <div>
+              <div style="font-size:14px; font-weight:700; color:var(--t1);">Download Your Data (GDPR Export)</div>
+              <div style="font-size:12.5px; color:var(--t2); margin-top:4px;">Download a complete JSON export of your profile, all saved forensic logs, and decrypted login history.</div>
+            </div>
+            <button class="btn btn-secondary" onclick="downloadUserData()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:6px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Download My Data
+            </button>
+          </div>
+        </div>
+
+        <!-- Danger Zone Card -->
+        <div class="card card-p" style="border:1px solid rgba(239, 68, 68, 0.3); background:rgba(239, 68, 68, 0.04);">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            <div style="font-size:14px; font-weight:700; color:#ef4444;">Danger Zone</div>
+            <span class="tag tag-critical">Destructive</span>
+          </div>
+          <p style="font-size:12.5px; color:var(--t2); margin-bottom:16px; line-height:1.5;">
+            Deleting your account will immediately revoke all active sessions and lock out your account. Your forensic scan data will be held for a 7-day grace period before permanent, unrecoverable purge.
+          </p>
+          <button class="btn btn-secondary" style="border-color:rgba(239, 68, 68, 0.5); color:#ef4444;" onclick="openDeleteAccountModal()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:6px;"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            Delete Account
+          </button>
+        </div>
+
+        <!-- Legal & Compliance Links -->
+        <div style="text-align:center; margin-top:20px; font-size:12px; color:var(--t3);">
+          <a href="privacy.html" target="_blank" style="color:var(--t3); text-decoration:none;">Privacy Policy</a> ·
+          <a href="terms.html" target="_blank" style="color:var(--t3); text-decoration:none;">Terms of Service</a> ·
+          <span>SecureMail v3.0</span>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ═══ ORGANIZATION & TEAM SANDBOX ═══ -->
+    <div class="page" id="page-org-management">
+      <div style="display:flex; flex-direction:column; gap:18px; max-width:980px; margin:0 auto;" class="fu">
+
+        <!-- Header Banner Card -->
+        <div class="card card-p" style="position:relative; overflow:hidden; border:1px solid rgba(129,140,248,0.3); background:linear-gradient(135deg, rgba(30,27,75,0.45), rgba(15,23,42,0.85));">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:16px;">
+            <div>
+              <div style="display:flex; align-items:center; gap:10px; margin-bottom:6px;">
+                <span style="font-size:24px;">🏢</span>
+                <span style="font-size:20px; font-weight:800; color:var(--t1);" id="org-name-header">Parul University SOC</span>
+                <span class="tag tag-clean" id="org-sandbox-badge" style="font-size:10.5px; font-weight:700;">SANDBOX: PARUL-SOC-01</span>
+              </div>
+              <div style="font-size:12.5px; color:var(--t2); line-height:1.5;">
+                Zero-Trust Multi-Tenant Perimeter · Verified Domain: <strong id="org-domain-text" style="color:#a5b4fc;">paruluniversity.ac.in</strong> · Owner: <span id="org-owner-text" style="color:var(--t1);">sameerkhurshed2@gmail.com</span>
+              </div>
+            </div>
+            <div style="display:flex; gap:10px; align-items:center;">
+              <button class="btn btn-secondary btn-sm" onclick="loadOrgManagement()" title="Refresh Telemetry">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:5px;"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                Sync Sandbox
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Metric KPI Cards -->
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(210px, 1fr)); gap:14px;">
+          <div class="card card-p" style="border-left:3px solid var(--purple);">
+            <div style="font-size:11.5px; color:var(--t3); text-transform:uppercase; font-weight:700; letter-spacing:0.5px;">Enrolled Members</div>
+            <div style="font-size:24px; font-weight:800; color:var(--t1); margin:6px 0;" id="org-stat-members">0 <span style="font-size:13px; color:var(--t3); font-weight:500;">/ 1,000 Seats</span></div>
+            <div style="font-size:11.5px; color:var(--t2);">Enterprise Pool Active</div>
+          </div>
+          <div class="card card-p" style="border-left:3px solid var(--cyan);">
+            <div style="font-size:11.5px; color:var(--t3); text-transform:uppercase; font-weight:700; letter-spacing:0.5px;">Sandbox Scans</div>
+            <div style="font-size:24px; font-weight:800; color:var(--cyan); margin:6px 0;" id="org-stat-scans">0</div>
+            <div style="font-size:11.5px; color:var(--t2);">Aggregated Ingest Stream</div>
+          </div>
+          <div class="card card-p" style="border-left:3px solid var(--red);">
+            <div style="font-size:11.5px; color:var(--t3); text-transform:uppercase; font-weight:700; letter-spacing:0.5px;">Threats Intercepted</div>
+            <div style="font-size:24px; font-weight:800; color:var(--red); margin:6px 0;" id="org-stat-threats">0</div>
+            <div style="font-size:11.5px; color:var(--t2);">Critical / High Attacks Blocked</div>
+          </div>
+          <div class="card card-p" style="border-left:3px solid var(--green);">
+            <div style="font-size:11.5px; color:var(--t3); text-transform:uppercase; font-weight:700; letter-spacing:0.5px;">Sandbox Clean Rate</div>
+            <div style="font-size:24px; font-weight:800; color:var(--green); margin:6px 0;" id="org-stat-clean-rate">100%</div>
+            <div style="font-size:11.5px; color:var(--t2);">Zero False Positives</div>
+          </div>
+        </div>
+
+        <!-- Invite Employee Action Card -->
+        <div class="card card-p">
+          <div style="font-size:14px; font-weight:700; color:var(--t1); margin-bottom:12px; display:flex; align-items:center; gap:8px;">
+            <span>✉️</span> Invite Employee or Assign Security Role
+          </div>
+          <div style="display:grid; grid-template-columns:1.5fr 1fr 1fr auto; gap:10px; align-items:center;" class="org-invite-grid">
+            <input type="email" id="org-invite-email" class="settings-input" placeholder="Employee corporate email (@paruluniversity.ac.in)..." style="width:100%;">
+            <input type="text" id="org-invite-name" class="settings-input" placeholder="Full Name (optional)..." style="width:100%;">
+            <select id="org-invite-role" class="settings-input" style="width:100%; cursor:pointer;">
+              <option value="user">Standard Employee (User)</option>
+              <option value="soc_analyst">SOC Analyst (Analyst)</option>
+              <option value="auditor">Compliance Auditor (Auditor)</option>
+            </select>
+            <button class="btn btn-primary" id="org-btn-invite" onclick="submitOrgInvite()" style="white-space:nowrap; padding:9px 18px;">
+              Invite to Sandbox
+            </button>
+          </div>
+          <div id="org-invite-msg" style="margin-top:10px; font-size:12px; display:none;"></div>
+        </div>
+
+        <!-- Team Roster Table -->
+        <div class="card card-p">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:10px;">
+            <div style="font-size:14px; font-weight:700; color:var(--t1); display:flex; align-items:center; gap:8px;">
+              <span>👥</span> Organization Team Directory (<span id="org-member-count-badge">0</span>)
+            </div>
+            <input type="text" id="org-member-search" class="settings-input" placeholder="Search by name or email..." oninput="filterOrgMembers()" style="max-width:240px; padding:6px 12px; font-size:12px;">
+          </div>
+
+          <div style="overflow-x:auto;">
+            <table class="data-table" style="width:100%; font-size:12.5px;" id="org-members-table">
+              <thead>
+                <tr>
+                  <th style="text-align:left;">Employee</th>
+                  <th style="text-align:left;">Role</th>
+                  <th style="text-align:left;">Status</th>
+                  <th style="text-align:left;">Enrolled Date</th>
+                  <th style="text-align:right;">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="org-members-tbody">
+                <tr><td colspan="5" style="text-align:center; padding:24px; color:var(--t3);">Loading organization team...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Sandboxed Aggregated Threat Stream Table -->
+        <div class="card card-p">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:10px;">
+            <div>
+              <div style="font-size:14px; font-weight:700; color:var(--t1); display:flex; align-items:center; gap:8px;">
+                <span>🛡️</span> Live Sandbox Threat Feed
+              </div>
+              <div style="font-size:12px; color:var(--t3); margin-top:2px;">Aggregated telemetry across all employee inboxes inside this tenant sandbox only.</div>
+            </div>
+            <button class="btn btn-secondary btn-sm" onclick="exportOrgSandboxReport()">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Export Sandbox Report
+            </button>
+          </div>
+
+          <div style="overflow-x:auto;">
+            <table class="data-table" style="width:100%; font-size:12.5px;">
+              <thead>
+                <tr>
+                  <th style="text-align:left;">Scanned At</th>
+                  <th style="text-align:left;">Employee Account</th>
+                  <th style="text-align:left;">Subject / Target</th>
+                  <th style="text-align:left;">Originating IP</th>
+                  <th style="text-align:left;">Verdict</th>
+                </tr>
+              </thead>
+              <tbody id="org-scans-tbody">
+                <tr><td colspan="5" style="text-align:center; padding:24px; color:var(--t3);">No threats in this sandbox yet. Employee scans will appear here automatically.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div><!-- /content -->
+
+  <!-- Floating Scan Email Button -->
+  <a class="floating-scan-btn" href="#" onclick="nav('scan');return false;" role="button">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    Scan Email
+  </a>
+</div><!-- /main -->
+</div><!-- /app -->
+
+<!-- Set Password for Google OAuth Account Modal -->
+<div id="modal-set-password" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.7); backdrop-filter:blur(6px); align-items:center; justify-content:center;" onclick="if(event.target===this)closeSetPasswordModal()">
+  <div class="card card-p" style="max-width:440px; width:90%; background:var(--bg); border:1px solid rgba(129,140,248,0.35); box-shadow:0 12px 45px rgba(0,0,0,0.85); position:relative;" onclick="event.stopPropagation()">
+    <button type="button" class="auth-close-btn" onclick="closeSetPasswordModal()" title="Close">&times;</button>
+    <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
+      <div style="width:36px; height:36px; border-radius:10px; background:rgba(129,140,248,0.15); border:1px solid rgba(129,140,248,0.35); display:flex; align-items:center; justify-content:center; font-size:18px;">🔑</div>
+      <div>
+        <div style="font-size:16px; font-weight:800; color:var(--t1);">Set Password for Email Sign-In</div>
+        <div style="font-size:12px; color:var(--t2);">Link dual email & password credentials to your Google account</div>
+      </div>
+    </div>
+
+    <div class="auth-err" id="setpw-err" style="margin-bottom:12px;"></div>
+
+    <div style="margin-bottom:12px;">
+      <label style="display:block; font-size:11.5px; color:var(--t2); margin-bottom:4px;">Account Email</label>
+      <input type="email" id="setpw-email-display" class="settings-input" disabled style="width:100%; opacity:0.8; cursor:not-allowed;">
+    </div>
+
+    <div style="margin-bottom:12px;">
+      <label style="display:block; font-size:11.5px; color:var(--t2); margin-bottom:4px;">New Password (min 8 chars, 1 uppercase)</label>
+      <div class="auth-pw-wrap">
+        <input type="password" id="setpw-new" class="settings-input" placeholder="Create new password" autocomplete="new-password" style="width:100%; padding-right:40px;">
+        <button type="button" class="pw-eye-btn" onclick="togglePwVis(this)" tabindex="-1" aria-label="Toggle password visibility">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <div style="margin-bottom:18px;">
+      <label style="display:block; font-size:11.5px; color:var(--t2); margin-bottom:4px;">Confirm Password</label>
+      <div class="auth-pw-wrap">
+        <input type="password" id="setpw-confirm" class="settings-input" placeholder="Re-enter password" autocomplete="new-password" style="width:100%; padding-right:40px;">
+        <button type="button" class="pw-eye-btn" onclick="togglePwVis(this)" tabindex="-1" aria-label="Toggle password visibility">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <div style="display:flex; justify-content:flex-end; gap:10px;">
+      <button class="btn btn-secondary" onclick="closeSetPasswordModal()">Cancel</button>
+      <button class="btn btn-primary" id="setpw-submit-btn" onclick="submitSetPassword()">Link Password</button>
+    </div>
+  </div>
+</div>
+
+<!-- Account Deletion Confirmation Modal -->
+<div id="modal-delete-account" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.7); backdrop-filter:blur(6px); align-items:center; justify-content:center;">
+  <div class="card card-p" style="max-width:440px; width:90%; background:var(--bg); border:1px solid rgba(239,68,68,0.4); box-shadow:0 10px 40px rgba(0,0,0,0.8);">
+    <div style="font-size:16px; font-weight:800; color:#ef4444; margin-bottom:8px;">Confirm Account Deletion</div>
+    <div style="font-size:12.5px; color:var(--t2); margin-bottom:16px; line-height:1.5;">
+      Your account will be immediately signed out and locked. All forensic logs and account data will be <strong>permanently purged after 7 days</strong>.
+    </div>
+
+    <div style="margin-bottom:16px;">
+      <label style="display:block; font-size:11.5px; color:var(--t3); margin-bottom:6px;">Type your email address (<strong id="del-modal-target-email" style="color:var(--t1);"></strong>) to confirm:</label>
+      <input type="text" id="del-modal-email-input" class="settings-input" placeholder="Type your email address..." oninput="validateDeleteEmailInput()" style="width:100%;">
+    </div>
+
+    <div style="display:flex; justify-content:flex-end; gap:10px;">
+      <button class="btn btn-secondary" onclick="closeDeleteAccountModal()">Cancel</button>
+      <button class="btn" id="del-modal-submit-btn" disabled onclick="submitAccountDeletion()" style="background:#ef4444; color:#fff; cursor:not-allowed; opacity:0.5;">
+        Confirm Account Deletion
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Generate API Key Modal -->
+<div id="modal-create-api-key" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.7); backdrop-filter:blur(6px); align-items:center; justify-content:center;">
+  <div class="card card-p" style="max-width:480px; width:90%; background:var(--bg); border:1px solid var(--border); box-shadow:0 10px 40px rgba(0,0,0,0.8);">
+    <div style="font-size:16px; font-weight:800; color:var(--t1); margin-bottom:6px;">Generate Programmatic API Key</div>
+    <div style="font-size:12.5px; color:var(--t2); margin-bottom:16px; line-height:1.5;">
+      Create a cryptographically secure key for automated mail server ingestion and SIEM workflows.
+    </div>
+
+    <div style="margin-bottom:14px;">
+      <label style="display:block; font-size:11.5px; color:var(--t2); margin-bottom:4px;">Key Label / Description *</label>
+      <input type="text" id="key-modal-name" class="settings-input" placeholder="e.g. Postfix Gateway Ingest" style="width:100%;">
+    </div>
+
+    <div style="margin-bottom:14px;">
+      <label style="display:block; font-size:11.5px; color:var(--t2); margin-bottom:6px;">Assign Capability Scopes</label>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; font-size:12px; color:var(--t1);">
+        <label style="display:flex;align-items:center;gap:6px;"><input type="checkbox" id="scope-scans" checked> <span>scans:write</span></label>
+        <label style="display:flex;align-items:center;gap:6px;"><input type="checkbox" id="scope-threat" checked> <span>threat_intel:read</span></label>
+        <label style="display:flex;align-items:center;gap:6px;"><input type="checkbox" id="scope-forensics" checked> <span>forensics:read</span></label>
+        <label style="display:flex;align-items:center;gap:6px;"><input type="checkbox" id="scope-reports" checked> <span>reports:export</span></label>
+      </div>
+    </div>
+
+    <div style="margin-bottom:18px;">
+      <label style="display:block; font-size:11.5px; color:var(--t2); margin-bottom:4px;">Expiration (Days)</label>
+      <select id="key-modal-expiry" style="width:100%; padding:8px 12px; background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:var(--r-sm); color:var(--t1); font-size:12.5px;">
+        <option value="0">Never Expires</option>
+        <option value="30">30 Days</option>
+        <option value="90">90 Days</option>
+        <option value="365">1 Year</option>
+      </select>
+    </div>
+
+    <div style="display:flex; justify-content:flex-end; gap:10px;">
+      <button class="btn btn-secondary" onclick="closeCreateAPIKeyModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="submitCreateAPIKey()">Generate Key</button>
+    </div>
+  </div>
+</div>
+
+<!-- Show Generated API Key Modal -->
+<div id="modal-show-api-key" style="display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.7); backdrop-filter:blur(6px); align-items:center; justify-content:center;">
+  <div class="card card-p" style="max-width:500px; width:90%; background:var(--bg); border:1px solid rgba(56,189,248,0.4); box-shadow:0 10px 40px rgba(0,0,0,0.8);">
+    <div style="font-size:16px; font-weight:800; color:var(--cyan); margin-bottom:6px;">API Key Created Successfully!</div>
+    <div style="font-size:12px; color:var(--amber); margin-bottom:14px; line-height:1.5;">
+      ⚠️ Please copy your key now. For your security, this key will <strong>never be shown again</strong>.
+    </div>
+
+    <div style="position:relative; margin-bottom:16px;">
+      <textarea id="modal-raw-key-text" readonly style="width:100%; height:70px; font-family:'JetBrains Mono',monospace; font-size:12px; background:rgba(15,23,42,0.9); border:1px solid var(--border); border-radius:var(--r-sm); color:var(--cyan); padding:10px; resize:none;"></textarea>
+      <button class="btn btn-primary btn-sm" onclick="copyRawAPIKey()" style="position:absolute; top:8px; right:8px;">Copy</button>
+    </div>
+
+    <div style="display:flex; justify-content:flex-end;">
+      <button class="btn btn-secondary" onclick="closeShowAPIKeyModal()">I Have Saved My Key</button>
+    </div>
+  </div>
+</div>
+
+<!-- Global Toast Notification Container -->
+<div id="toast"></div>
+
+<script src="js/app.js"></script>
+</body>
+</html>

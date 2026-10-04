@@ -64,6 +64,8 @@ forensics_logs/
 *.msg
 !sample_emails/*.eml
 !sample_emails/*.msg
+!SecureMail/Test_Suite/*.eml
+!SecureMail/Test_Suite/*.msg
 
 
 # ── IDE & Editor Artifacts ─────────────────────────────────────────

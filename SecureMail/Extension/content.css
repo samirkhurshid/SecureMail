@@ -1,0 +1,18 @@
+/* SecureMail — Content Script Styles */
+/* Scoped to #securemail-banner to avoid clashing with Gmail/Outlook CSS */
+
+#securemail-banner {
+  animation: sm-fadeIn 0.25s ease both;
+  z-index: 9999;
+}
+
+@keyframes sm-fadeIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Suspicious link marker */
+a[data-sm-risk="high"] {
+  text-decoration: line-through !important;
+  color: #ef4444 !important;
+}
