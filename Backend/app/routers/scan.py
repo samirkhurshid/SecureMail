@@ -140,13 +140,14 @@ async def scan_email(
     background_tasks: BackgroundTasks,
     http_request: Request,
     user: Optional[CurrentUser] = Depends(get_optional_user),
+    bypass_quota: bool = False,
 ) -> Dict[str, Any]:
     """
     Run a full security scan on a raw email.
     Supports both authenticated scanning (unlimited) and anonymous trial scanning (5 free scans/day per IP).
     """
     client_ip = get_client_ip(http_request)
-    if user is None:
+    if user is None and not bypass_quota:
         allowed, current_count = check_and_increment_anon_quota(client_ip)
         if not allowed:
             raise HTTPException(
@@ -506,11 +507,11 @@ async def check_ip(request: IPCheckRequest) -> Dict[str, Any]:
 async def demo_scan(
     background_tasks: BackgroundTasks,
     http_request: Request,
-    user: CurrentUser = Depends(get_current_user)
+    user: Optional[CurrentUser] = Depends(get_optional_user),
 ):
     """
     Runs a scan on a built-in phishing email sample — useful for testing.
-    Persists forensic telemetry to the authenticated user's log history.
+    Free demo scan available to both guests and authenticated users.
     """
     sample_eml = """From: PayPal Support <noreply@paypa1-support.ru>
 Reply-To: help@secure-login.net
@@ -537,7 +538,13 @@ Your account will be closed in 24 hours if no action is taken.
 PayPal Security Team
 """
     req = EmailScanRequest(raw_email=sample_eml)
-    return await scan_email(request=req, background_tasks=background_tasks, http_request=http_request, user=user)
+    return await scan_email(
+        request=req,
+        background_tasks=background_tasks,
+        http_request=http_request,
+        user=user,
+        bypass_quota=True,
+    )
 
 
 @router.post("/report/pdf", summary="Generate on-demand executive SOC PDF report from live scan result")

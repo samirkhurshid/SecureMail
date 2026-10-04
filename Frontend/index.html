@@ -3114,6 +3114,24 @@ async function scanEmail(){
 async function runDemo(){
   nav('scan');
   errShow('scan-err','');loader('scan-loader',true);showResultLoading();
+  const demoEmail = `From: PayPal Support <noreply@paypa1-support.ru>
+Reply-To: help@secure-login.net
+To: victim@example.com
+Subject: Urgent: Your PayPal account has been suspended
+Authentication-Results: mx.example.com; spf=fail; dkim=fail; dmarc=fail
+Received: from mail.evil.ru (mail.evil.ru [185.234.218.47])
+
+Dear Customer,
+
+Your PayPal account has been suspended due to unusual activity.
+You must verify your account immediately to avoid permanent closure.
+
+Please click here to verify your credentials:
+http://paypa1-login.ru/verify?token=abc123&next=account
+
+PayPal Security Team`;
+  const inputEl = document.getElementById('email-input');
+  if (inputEl) inputEl.value = demoEmail;
   try{
     const r = await apiFetch(`${API}/scan/demo`);
     const d = await r.json();
