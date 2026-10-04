@@ -130,6 +130,7 @@ app.include_router(organization_router.router, prefix="/api/org", tags=["Organiz
 
 
 @app.get("/health", tags=["Health"])
+@app.get("/api/health", tags=["Health"])
 async def health():
     return {"status": "healthy", "timestamp": time.time()}
 

@@ -5116,13 +5116,18 @@ function showPendingDeletionScreen(msg) {
 // ── Init ──────────────────────────────────────
 function _initDashboardAfterAuth() {
   nav('dashboard');
-  const healthUrl = `${API.replace(/\/api$/, '')}/health`;
-  apiFetch(healthUrl).then(r=>r.json()).then(d=>{
+  const isCloud = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+  const healthUrl = `${API}/health`;
+  apiFetch(healthUrl).catch(() => fetch(`${API.replace(/\/api$/, '')}/health`)).then(r=>r.json()).then(d=>{
     if(d.status!=='healthy')throw new Error();
   }).catch(()=>{
-    toast('⚠ Backend offline. Run: python -m uvicorn app.main:app --port 8000','error');
+    if (isCloud) {
+      toast('⏳ Backend is waking up (Render free tier) or reconnecting...', 'info');
+    } else {
+      toast('⚠ Backend offline. Run: python -m uvicorn app.main:app --port 8000','error');
+    }
     const tc = document.getElementById('threats-today-count');
-    if(tc) tc.textContent='Backend Offline';
+    if(tc) tc.textContent = isCloud ? 'Connecting...' : 'Backend Offline';
     const badge = document.querySelector('.threat-today-badge');
     if(badge) badge.style.borderColor='rgba(239,68,68,0.3)';
   });
@@ -5337,11 +5342,24 @@ function showAppGuest() {
   nav('scan');
 
   // Check backend health
-  const healthUrl = `${API.replace(/\/api$/, '')}/health`;
-  fetch(healthUrl).then(r=>r.json()).then(d=>{
+  const isCloud = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+  const healthUrl = `${API}/health`;
+  fetch(healthUrl).catch(() => fetch(`${API.replace(/\/api$/, '')}/health`)).then(r=>r.json()).then(d=>{
     if(d.status!=='healthy')throw new Error();
   }).catch(()=>{
-    toast('⚠ Backend offline. Some features may not work.','error');
+    if (isCloud) {
+      toast('⏳ Cloud backend waking up (takes ~30s on free tier). Retrying...', 'info');
+      setTimeout(() => {
+        fetch(healthUrl).catch(() => fetch(`${API.replace(/\/api$/, '')}/health`)).then(r=>r.json()).then(d=>{
+          if (d.status === 'healthy') {
+            toast('✔ Cloud backend is online and ready!', 'success');
+            loadGuestQuota();
+          }
+        }).catch(()=>{});
+      }, 12000);
+    } else {
+      toast('⚠ Backend offline. Some features may not work.','error');
+    }
   });
 
   // Load guest quota
