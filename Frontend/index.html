@@ -1871,8 +1871,8 @@
             </div>
 
             <textarea id="email-input" placeholder="Or paste raw email text here…
-From: PayPal Support <noreply@paypa1-support.ru>
-Subject: Urgent: Your account has been suspended
+From: Security Operations <alerts@security-audit.internal>
+Subject: Urgent: Security Verification Notice
 Authentication-Results: spf=fail; dkim=fail; dmarc=fail" style="width:100%;min-height:130px;resize:vertical;background:rgba(0,0,0,0.2);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--t1);font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.6;padding:12px;outline:none;transition:all 0.18s;display:block;margin-bottom:12px"></textarea>
 
             <div style="display:flex;gap:8px;margin-bottom:16px">
@@ -2063,7 +2063,7 @@ Authentication-Results: spf=fail; dkim=fail; dmarc=fail" style="width:100%;min-h
           <span style="font-size:11px;color:var(--t3)">Query any IP, Domain, URL, or SHA-256 Hash</span>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <input type="text" id="ti-sandbox-input" placeholder="e.g. 185.234.218.47, paypa1-support.ru, or file hash..." style="flex:1;min-width:260px;background:rgba(0,0,0,0.25);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--t1);font-family:'JetBrains Mono',monospace;font-size:12px;padding:9px 12px;outline:none" onkeydown="if(event.key==='Enter')doInstantIOCLookup()"/>
+          <input type="text" id="ti-sandbox-input" placeholder="e.g. 198.51.100.25, suspicious-domain.com, or file hash..." style="flex:1;min-width:260px;background:rgba(0,0,0,0.25);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--t1);font-family:'JetBrains Mono',monospace;font-size:12px;padding:9px 12px;outline:none" onkeydown="if(event.key==='Enter')doInstantIOCLookup()"/>
           <button class="btn btn-primary" onclick="doInstantIOCLookup()">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>Lookup Reputation
           </button>
@@ -2878,6 +2878,8 @@ Authentication-Results: spf=fail; dkim=fail; dmarc=fail" style="width:100%;min-h
   </div>
 </div>
 
+<!-- Global Toast Notification Container -->
+<div id="toast"></div>
 
 <script>
 const API = (typeof window._resolveBackendApi === 'function')
@@ -2943,7 +2945,8 @@ function nav(page) {
   if(targetPage) targetPage.classList.add('active');
   const el = document.getElementById('nav-'+page);
   if(el) el.classList.add('active');
-  document.getElementById('topbar-title').textContent = TITLES[page]||page;
+  const tt = document.getElementById('topbar-title');
+  if (tt) tt.textContent = TITLES[page]||page;
   if(page==='forensics') loadForensics();
   if(page==='audit-trail') loadAuditTrailPage();
   if(page==='org-management') loadOrgManagement();
@@ -2956,7 +2959,18 @@ function nav(page) {
 
 // ── Toast ─────────────────────────────────────
 let _tt;
-function toast(msg,type=''){const t=document.getElementById('toast');t.textContent=msg;t.className=type?`show ${type}`:'show';clearTimeout(_tt);_tt=setTimeout(()=>t.className='',3200)}
+function toast(msg, type='') {
+  let t = document.getElementById('toast');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = 'toast';
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  t.className = type ? `show ${type}` : 'show';
+  clearTimeout(_tt);
+  _tt = setTimeout(() => { if (t) t.className = ''; }, 3200);
+}
 
 // ── Helpers ───────────────────────────────────
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
@@ -2993,16 +3007,16 @@ async function loadDashboard() {
     const logs = logsData.logs||[];
 
     // Stat cards
-    document.getElementById('ov-total').textContent = stats.total??0;
+    const elTot = document.getElementById('ov-total'); if (elTot) elTot.textContent = stats.total??0;
     const byRisk = stats.by_risk_level||{};
     const threats = (byRisk.critical||0)+(byRisk.high||0)+(byRisk.medium||0);
-    document.getElementById('ov-threats').textContent = threats;
-    document.getElementById('ov-critical-sub').textContent = `${(byRisk.critical||0)+(byRisk.high||0)} high/crit · ${byRisk.clean||0} clean`;
-    document.getElementById('ov-attach').textContent = stats.total_attachments??0;
-    document.getElementById('ov-attach-sub').textContent = 'scanned';
-    document.getElementById('ov-links').textContent = stats.total_urls??0;
-    document.getElementById('ov-links-sub').textContent = 'all time';
-    document.getElementById('ov-today').textContent = `+${stats.total??0} total`;
+    const elThr = document.getElementById('ov-threats'); if (elThr) elThr.textContent = threats;
+    const elCrit = document.getElementById('ov-critical-sub'); if (elCrit) elCrit.textContent = `${(byRisk.critical||0)+(byRisk.high||0)} high/crit · ${byRisk.clean||0} clean`;
+    const elAtt = document.getElementById('ov-attach'); if (elAtt) elAtt.textContent = stats.total_attachments??0;
+    const elAttSub = document.getElementById('ov-attach-sub'); if (elAttSub) elAttSub.textContent = 'scanned';
+    const elLnk = document.getElementById('ov-links'); if (elLnk) elLnk.textContent = stats.total_urls??0;
+    const elLnkSub = document.getElementById('ov-links-sub'); if (elLnkSub) elLnkSub.textContent = 'all time';
+    const elTod = document.getElementById('ov-today'); if (elTod) elTod.textContent = `+${stats.total??0} total`;
 
     // Topbar badge
     const threatCountEl = document.getElementById('threats-today-count');
@@ -5418,16 +5432,16 @@ function switchTrialTab(tab) {
 }
 
 function loadTrialSampleEmail() {
-  document.getElementById('trial-email-text').value = `From: PayPal Support <noreply@paypa1-support.ru>
-Reply-To: help@secure-login.net
-Subject: Urgent: Your PayPal account has been suspended
+  document.getElementById('trial-email-text').value = `From: Security Verification <verify@phish-simulation.example.com>
+Reply-To: audit-desk@phish-simulation.example.com
+Subject: Notice: Security Compliance Action Required
 Date: Mon, 26 May 2026 10:00:00 +0000
-DKIM-Signature: v=1; a=rsa-sha256; d=paypa1-support.ru
+DKIM-Signature: v=1; a=rsa-sha256; d=phish-simulation.example.com
 Authentication-Results: mx.example.com; spf=fail; dkim=fail; dmarc=fail
 
-Dear Customer,
-Your PayPal account has been suspended due to unusual activity.
-Verify immediately: http://paypa1-login.ru/verify?token=abc123`;
+Dear User,
+This is a simulated security awareness exercise regarding unauthorized access.
+Verify status: https://phish-simulation.example.com/verify-status?id=sim902`;
 }
 
 async function loadTrialQuota() {
@@ -5882,7 +5896,11 @@ async function submitOnboarding() {
 
     closeAuthModal();
     if (user) {
-      showApp(user);
+      try {
+        showApp(user);
+      } catch (appErr) {
+        console.warn('UI transition error:', appErr);
+      }
     }
     toast('🎉 Welcome to SecureMail! Workspace configured successfully.', 'success');
   } catch (e) {
