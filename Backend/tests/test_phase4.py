@@ -77,4 +77,4 @@ def test_other_routers_still_require_auth():
     assert client.post("/api/headers/analyze", json={}).status_code == 401
     assert client.get("/api/settings/status").status_code == 401
     assert client.get("/api/account/me").status_code == 401
-    assert client.get("/api/scan/demo").status_code == 401
+    assert client.get("/api/forensics/stats").status_code == 401

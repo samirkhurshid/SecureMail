@@ -3132,7 +3132,7 @@ async function scanEmail(){
     if(!r.ok) throw new Error(d.detail||'Scan failed');
     renderScanResult(d);
     loadGuestQuota();
-    if(window._authUser) { loadDashboard().catch(()=>{}); }
+    if(window._authUser) { setTimeout(() => { loadDashboard().catch(()=>{}); }, 200); }
   }catch(e){errShow('scan-err',e.message);showResultReady()}
   loader('scan-loader',false);
 }
@@ -3163,6 +3163,7 @@ PayPal Security Team`;
     const d = await r.json();
     if(!r.ok) throw new Error(d.detail||'Demo failed');
     renderScanResult(d);
+    if(window._authUser) { setTimeout(() => { loadDashboard().catch(()=>{}); }, 200); }
   }catch(e){errShow('scan-err',e.message);showResultReady()}
   loader('scan-loader',false);
 }

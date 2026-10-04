@@ -420,23 +420,24 @@ async def scan_email(
     }
 
     # ── Step 14: Automated Forensic Logging, Audit Trail & Alert Dispatch ──
-    if user and user.uid:
-        background_tasks.add_task(usage_tracker.record_scan_usage, user.uid)
+    if user and (user.uid or user.email):
+        effective_uid = user.uid or user.email
+        background_tasks.add_task(usage_tracker.record_scan_usage, effective_uid)
         background_tasks.add_task(
             audit_service.log_audit_event,
             event_type=audit_service.EVENT_SCAN_EMAIL,
-            user_id=user.uid,
-            user_email=user.email,
+            user_id=effective_uid,
+            user_email=user.email or "",
             user_role=getattr(user, "role", "user"),
             ip_address=client_ip,
             resource_id=scan_id,
             details={"risk_score": score, "risk_level": risk_level, "sender": sender_email, "subject": subject}
         )
-        background_tasks.add_task(save_forensic_log, result, user.uid)
+        background_tasks.add_task(save_forensic_log, result, effective_uid, user.email)
 
         if risk_level in ("high", "critical"):
             from app.services import user_service, webhook_notifier
-            user_doc = user_service.get_or_create_user_doc(user.uid)
+            user_doc = user_service.get_or_create_user_doc(effective_uid)
             webhook_url = user_doc.get("webhook_url")
             if webhook_url and webhook_url.strip():
                 background_tasks.add_task(webhook_notifier.notify_webhook, webhook_url, result)
@@ -471,13 +472,14 @@ async def scan_url(
     # Check local Threat Vault for instant zero-day hit
     vault_match = threat_intel_service.lookup_ioc(request.url, "url")
     
-    if user and user.uid:
-        background_tasks.add_task(usage_tracker.record_scan_usage, user.uid)
+    if user and (user.uid or user.email):
+        effective_uid = user.uid or user.email
+        background_tasks.add_task(usage_tracker.record_scan_usage, effective_uid)
         background_tasks.add_task(
             audit_service.log_audit_event,
             event_type=audit_service.EVENT_SCAN_URL,
-            user_id=user.uid,
-            user_email=user.email,
+            user_id=effective_uid,
+            user_email=user.email or "",
             user_role=getattr(user, "role", "user"),
             ip_address=client_ip,
             resource_id=request.url,

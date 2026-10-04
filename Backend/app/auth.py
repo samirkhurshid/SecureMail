@@ -193,9 +193,9 @@ async def get_current_user(
             logger.warning(f"Could not parse token payload: {e}")
             raise HTTPException(status_code=401, detail="Invalid authentication token")
 
-    uid = decoded.get("uid")
-    email = decoded.get("email")
-    name = decoded.get("name")
+    uid = decoded.get("uid") or decoded.get("user_id") or decoded.get("sub") or decoded.get("email")
+    email = decoded.get("email") or ""
+    name = decoded.get("name") or (email.split("@")[0] if email else "User")
 
     # Check 7-day soft-delete status
     from app.services.user_service import is_account_pending_deletion

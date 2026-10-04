@@ -40,7 +40,7 @@ def _invalidate_cache() -> None:
     _CACHE = None
 
 
-def save_forensic_log(result: dict, user_id: Optional[str] = None) -> str:
+def save_forensic_log(result: dict, user_id: Optional[str] = None, user_email: Optional[str] = None) -> str:
     """Persist a scan result as a JSON log file. Returns the log_id."""
     log_id = result.get("scan_id") or str(uuid.uuid4())
     log_dir = get_log_dir()
@@ -49,6 +49,8 @@ def save_forensic_log(result: dict, user_id: Optional[str] = None) -> str:
     # Associate log with the logged-in user
     if user_id and "user_id" not in result:
         result["user_id"] = user_id
+    if user_email and "user_email" not in result:
+        result["user_email"] = user_email
 
     # Normalise sender field — always store as sender_email
     if "sender" in result and "sender_email" not in result:
@@ -62,11 +64,11 @@ def save_forensic_log(result: dict, user_id: Optional[str] = None) -> str:
 
 
 # NOTE: At higher log volumes (100s+), this should move to a per-user subfolder or SQLite instead of scanning all files.
-def get_all_logs(user_id: Optional[str] = None) -> List[Dict]:
+def get_all_logs(user_id: Optional[str] = None, user_email: Optional[str] = None) -> List[Dict]:
     """
     Return logs sorted newest-first with caching and per-user filtering.
     Pre-auth legacy logs (missing user_id) are kept untouched on disk for manual/audit reference,
-    but excluded from API responses whenever user_id is specified.
+    but excluded from API responses whenever user_id or user_email is specified.
     """
     global _CACHE, _CACHE_TIME
     now = time.time()
@@ -95,17 +97,24 @@ def get_all_logs(user_id: Optional[str] = None) -> List[Dict]:
         _CACHE = raw_logs
         _CACHE_TIME = now
 
-    # Filter logs by user_id if provided
-    if user_id:
-        return [log for log in raw_logs if log.get("user_id") == user_id]
+    # Filter logs by user_id or user_email if provided
+    if user_id or user_email:
+        filtered = []
+        for log in raw_logs:
+            l_uid = log.get("user_id")
+            l_email = log.get("user_email")
+            if user_id and l_uid == user_id:
+                filtered.append(log)
+            elif user_email and (l_email == user_email or l_uid == user_email):
+                filtered.append(log)
+        return filtered
     return raw_logs
 
 
-def get_log_by_id(log_id: str, user_id: Optional[str] = None) -> Optional[Dict]:
+def get_log_by_id(log_id: str, user_id: Optional[str] = None, user_email: Optional[str] = None) -> Optional[Dict]:
     """
     Fetch a single log by ID.
-    If user_id is provided and the log belongs to a different user (or has no user_id),
-    returns None to prevent unauthorized access and trigger a 404 in the API router.
+    If user_id or user_email is provided, verifies ownership before returning.
     """
     log_dir = get_log_dir()
     path = os.path.join(log_dir, f"{log_id}.json")
@@ -120,18 +129,21 @@ def get_log_by_id(log_id: str, user_id: Optional[str] = None) -> Optional[Dict]:
                 data["sender_email"] = data.get("sender", "")
             
             # Enforce user ownership check
-            if user_id and data.get("user_id") != user_id:
-                return None
+            if user_id or user_email:
+                l_uid = data.get("user_id")
+                l_email = data.get("user_email")
+                matches = (user_id and l_uid == user_id) or (user_email and (l_email == user_email or l_uid == user_email))
+                if not matches:
+                    return None
             return data
     except (json.JSONDecodeError, OSError):
         return None
 
 
-def delete_log_by_id(log_id: str, user_id: Optional[str] = None) -> bool:
+def delete_log_by_id(log_id: str, user_id: Optional[str] = None, user_email: Optional[str] = None) -> bool:
     """
     Delete a log by ID.
-    Only deletes if the log's stored user_id matches user_id. Returns False if not found
-    or owned by another user so the API router returns 404.
+    Only deletes if the log's stored user_id or user_email matches.
     """
     log_dir = get_log_dir()
     path = os.path.join(log_dir, f"{log_id}.json")
@@ -140,8 +152,12 @@ def delete_log_by_id(log_id: str, user_id: Optional[str] = None) -> bool:
     try:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
-            if user_id and data.get("user_id") != user_id:
-                return False
+            if user_id or user_email:
+                l_uid = data.get("user_id")
+                l_email = data.get("user_email")
+                matches = (user_id and l_uid == user_id) or (user_email and (l_email == user_email or l_uid == user_email))
+                if not matches:
+                    return False
     except (json.JSONDecodeError, OSError):
         return False
 
@@ -150,11 +166,11 @@ def delete_log_by_id(log_id: str, user_id: Optional[str] = None) -> bool:
     return True
 
 
-def get_stats(user_id: Optional[str] = None) -> Dict:
+def get_stats(user_id: Optional[str] = None, user_email: Optional[str] = None) -> Dict:
     """
-    Return aggregate statistics filtered by user_id.
+    Return aggregate statistics filtered by user_id and/or user_email.
     """
-    logs = get_all_logs(user_id=user_id)
+    logs = get_all_logs(user_id=user_id, user_email=user_email)
     total = len(logs)
 
     by_risk: Dict[str, int] = {

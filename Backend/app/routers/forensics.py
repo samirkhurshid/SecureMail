@@ -17,7 +17,7 @@ async def list_logs(
     search: str = Query(None),
     user: CurrentUser = Depends(get_current_user)
 ):
-    logs = forensics_service.get_all_logs(user_id=user.uid)
+    logs = forensics_service.get_all_logs(user_id=user.uid, user_email=user.email)
     
     # Filter by risk_level
     if risk_level:
@@ -40,11 +40,11 @@ async def list_logs(
 
 @router.get("/stats")
 async def get_stats(user: CurrentUser = Depends(get_current_user)):
-    return forensics_service.get_stats(user_id=user.uid)
+    return forensics_service.get_stats(user_id=user.uid, user_email=user.email)
 
 @router.get("/export/json")
 async def export_json(user: CurrentUser = Depends(get_current_user)):
-    logs = forensics_service.get_all_logs(user_id=user.uid)
+    logs = forensics_service.get_all_logs(user_id=user.uid, user_email=user.email)
     data = json.dumps(logs, indent=2)
     return StreamingResponse(
         io.BytesIO(data.encode("utf-8")),
@@ -54,7 +54,7 @@ async def export_json(user: CurrentUser = Depends(get_current_user)):
 
 @router.get("/export/csv")
 async def export_csv(user: CurrentUser = Depends(get_current_user)):
-    logs = forensics_service.get_all_logs(user_id=user.uid)
+    logs = forensics_service.get_all_logs(user_id=user.uid, user_email=user.email)
     output = io.StringIO()
     writer = csv.writer(output)
     
@@ -81,7 +81,7 @@ async def export_csv(user: CurrentUser = Depends(get_current_user)):
 
 @router.get("/{log_id}")
 async def get_log(log_id: str, user: CurrentUser = Depends(get_current_user)):
-    log = forensics_service.get_log_by_id(log_id, user_id=user.uid)
+    log = forensics_service.get_log_by_id(log_id, user_id=user.uid, user_email=user.email)
     if not log:
         raise HTTPException(status_code=404, detail="Log not found")
     return log
@@ -94,7 +94,7 @@ from app.services.rbac_service import require_permission
 @router.get("/{log_id}/pdf", summary="Export stored forensic record as executive PDF report")
 async def export_log_pdf(log_id: str, user: CurrentUser = Depends(get_current_user)):
     from app.services import report_generator
-    log = forensics_service.get_log_by_id(log_id, user_id=user.uid)
+    log = forensics_service.get_log_by_id(log_id, user_id=user.uid, user_email=user.email)
     if not log:
         raise HTTPException(status_code=404, detail="Log not found")
         
@@ -117,7 +117,7 @@ async def export_log_pdf(log_id: str, user: CurrentUser = Depends(get_current_us
 
 @router.delete("/{log_id}")
 async def delete_log(log_id: str, user: CurrentUser = Depends(require_permission("forensics:delete"))):
-    success = forensics_service.delete_log_by_id(log_id, user_id=user.uid)
+    success = forensics_service.delete_log_by_id(log_id, user_id=user.uid, user_email=user.email)
     if not success:
         raise HTTPException(status_code=404, detail="Log not found")
         
@@ -142,6 +142,8 @@ async def save_log(result: dict, user: CurrentUser = Depends(get_current_user)):
     if not result:
         raise HTTPException(status_code=400, detail="No scan result provided")
     result["user_id"] = user.uid
-    log_id = forensics_service.save_forensic_log(result, user_id=user.uid)
+    if user.email:
+        result["user_email"] = user.email
+    log_id = forensics_service.save_forensic_log(result, user_id=user.uid, user_email=user.email)
     return {"status": "saved", "log_id": log_id}
 
