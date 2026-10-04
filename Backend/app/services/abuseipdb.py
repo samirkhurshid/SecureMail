@@ -14,6 +14,12 @@ settings = get_settings()
 ABUSEIPDB_BASE = "https://api.abuseipdb.com/api/v2"
 
 
+import time
+
+_IP_CACHE: dict[str, tuple[float, dict]] = {}
+_IP_CACHE_TTL = 86400.0  # 24 hours
+
+
 async def check_ip(ip: str) -> dict:
     """
     Query AbuseIPDB for an IP address.
@@ -28,6 +34,12 @@ async def check_ip(ip: str) -> dict:
                 "country_code": "LOCAL", "isp": "Private/Reserved", "total_reports": 0,
                 "_note": "Private/reserved IP — not queried"}
 
+    now = time.time()
+    if ip in _IP_CACHE:
+        cached_ts, cached_res = _IP_CACHE[ip]
+        if now - cached_ts < _IP_CACHE_TTL:
+            return dict(cached_res)
+
     try:
         async with httpx.AsyncClient() as client:
             resp = await client.get(
@@ -37,7 +49,7 @@ async def check_ip(ip: str) -> dict:
                     "Accept": "application/json",
                 },
                 params={"ipAddress": ip, "maxAgeInDays": 90, "verbose": True},
-                timeout=settings.SCAN_TIMEOUT_SECONDS,
+                timeout=4.0,
             )
 
             if resp.status_code == 401:
@@ -56,7 +68,9 @@ async def check_ip(ip: str) -> dict:
                 return _error_result(ip, f"http_{resp.status_code}")
 
             data = resp.json().get("data", {})
-            return _parse_response(data)
+            res = _parse_response(data)
+            _IP_CACHE[ip] = (now, res)
+            return res
 
     except httpx.TimeoutException:
         logger.error(f"AbuseIPDB timeout for IP {ip}")
