@@ -3081,13 +3081,15 @@ async function loadDashboard() {
         recentListEl.innerHTML = '<div style="padding:32px;text-align:center;color:var(--t3);font-size:13px">No recent scans yet 🎉</div>';
       } else {
         recentListEl.innerHTML = recentScans.map(l=>{
+          const isClean = l.risk_level === 'clean';
           const detectedThreats = (l.threat_types||[]).filter(t=>t!=='clean');
-          const type = detectedThreats[0] || (l.risk_level==='clean' ? 'clean_email' : 'email_scan');
+          const type = isClean ? 'clean_email' : (detectedThreats[0] || 'email_scan');
+          const typeTitle = isClean ? 'Clean Email' : type.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
           const ago = l.scanned_at ? timeAgo(l.scanned_at) : 'just now';
           return `<div class="threat-item" onclick="viewLog('${l.log_id||l.scan_id}')">
             ${threatIcon(type, l.risk_level||'clean')}
             <div class="threat-body">
-              <div class="threat-name">${esc(type.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase()))}</div>
+              <div class="threat-name">${esc(typeTitle)}</div>
               <div class="threat-desc">${esc(l.summary||l.subject||'—')}</div>
               <div class="threat-meta">From: ${esc(l.sender_email||'—')} · ${ago}</div>
             </div>
@@ -3099,20 +3101,24 @@ async function loadDashboard() {
 
     // Threat breakdown
     const typeMap = stats.threat_types||{};
-    const sorted = Object.entries(typeMap).sort((a,b)=>b[1]-a[1]).slice(0,5);
+    const sorted = Object.entries(typeMap).filter(([k]) => k !== 'clean').sort((a,b)=>b[1]-a[1]).slice(0,5);
     const maxV = sorted[0]?.[1]||1;
     const colors = ['var(--red)','var(--orange)','var(--amber)','var(--lime)','var(--green)'];
     const total2 = Object.values(typeMap).reduce((a,b)=>a+b,0)||1;
     const breakdownEl = document.getElementById('threat-breakdown');
     if (breakdownEl) {
-      breakdownEl.innerHTML = sorted.length ? sorted.map(([k,v],i)=>`
-        <div style="margin-bottom:14px">
-          <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px">
-            <span style="color:var(--t2)">${k.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase())}</span>
-            <span style="color:${colors[i]};font-weight:600">${Math.round((v/total2)*100)}%</span>
-          </div>
-          <div class="sbar-wrap"><div class="sbar" style="width:${Math.round((v/maxV)*100)}%;background:${colors[i]}"></div></div>
-        </div>`).join('') : '<p style="color:var(--t3);font-size:13px">No threats detected in scans 🎉</p>';
+      if (threats === 0 || !sorted.length) {
+        breakdownEl.innerHTML = '<div style="padding:28px 12px;text-align:center;color:var(--t3);font-size:13px"><div style="font-size:22px;margin-bottom:6px">🛡️</div><div style="font-weight:600;color:var(--t1);margin-bottom:4px">No threats detected 🎉</div><div style="font-size:11.5px;color:var(--green)">100% of analyzed traffic is clean and verified</div></div>';
+      } else {
+        breakdownEl.innerHTML = sorted.map(([k,v],i)=>`
+          <div style="margin-bottom:14px">
+            <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px">
+              <span style="color:var(--t2)">${esc(k.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase()))}</span>
+              <span style="color:${colors[i%colors.length]};font-weight:600">${Math.round((v/total2)*100)}%</span>
+            </div>
+            <div class="sbar-wrap"><div class="sbar" style="width:${Math.round((v/maxV)*100)}%;background:${colors[i%colors.length]}"></div></div>
+          </div>`).join('');
+      }
     }
   } catch(e) { console.warn('Failed to load dashboard:', e); }
 }

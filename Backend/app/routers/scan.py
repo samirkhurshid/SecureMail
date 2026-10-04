@@ -431,9 +431,10 @@ async def scan_email(
         elif score >= 35:
             risk_level = "medium"
 
-    # ── Step 13: Final Risk Aggregation & Executive Summary ────────
-    # Note: Base risk scoring, homograph impersonation, pattern-based probabilistic scoring,
-    # and quishing risk scores have all been reconciled and folded into `score` and `threat_types`.
+    # If overall risk level resolved to clean, normalize threat_types to ["clean"]
+    if risk_level == "clean":
+        threat_types = ["clean"]
+
     summary = risk_scorer.summarise(score, risk_level, threat_types)
     duration_ms = round((time.time() - start) * 1000)
 

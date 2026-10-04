@@ -263,10 +263,12 @@ def compute_email_risk_score(
     # Apply ground-truth & threat-vault floor: confirmed VT and Threat Vault detections can't be diluted
     score = max(score, ground_truth_floor, threat_vault_floor)
 
-    if score == 0 and not threat_types:
-        threat_types.add("clean")
-
     risk_level = _score_to_level(score)
+    if risk_level == "clean":
+        threat_types = {"clean"}
+    elif not threat_types:
+        threat_types.add("unknown")
+
     return score, risk_level, list(threat_types)
 
 

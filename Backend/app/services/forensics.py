@@ -185,8 +185,11 @@ def get_stats(user_id: Optional[str] = None, user_email: Optional[str] = None) -
         level = log.get("risk_level", "unknown").lower()
         by_risk[level] = by_risk.get(level, 0) + 1
 
-        for threat in log.get("threat_types", []):
-            threat_types[threat] = threat_types.get(threat, 0) + 1
+        # Only aggregate genuine threat types for detected threat levels
+        if level in ("critical", "high", "medium", "low"):
+            for threat in log.get("threat_types", []):
+                if threat and threat.lower() not in ("clean", "unknown"):
+                    threat_types[threat] = threat_types.get(threat, 0) + 1
 
         total_attachments += len(log.get("attachments", []))
         total_urls += len(log.get("urls", []))
