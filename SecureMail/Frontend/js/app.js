@@ -219,25 +219,27 @@ function setScanMode(mode) {
   const scanBtnLabel = document.getElementById('scan-btn-label');
   const icon = document.getElementById('scan-mode-icon');
   
-  if (mode === 'deep') {
-    if (btnQ) { btnQ.style.background = 'transparent'; btnQ.style.color = 'var(--t2)'; }
-    if (btnD) { btnD.style.background = 'var(--accent)'; btnD.style.color = '#fff'; }
-    if (desc) desc.textContent = 'Deep Scan: Queries 87+ VirusTotal AV engines & AbuseIPDB (3-6s)';
-    if (scanBtnLabel) scanBtnLabel.textContent = 'Deep Scan (VT)';
-    if (icon) icon.textContent = '🛡️';
-  } else {
-    if (btnQ) { btnQ.style.background = 'var(--accent)'; btnQ.style.color = '#fff'; }
-    if (btnD) { btnD.style.background = 'transparent'; btnD.style.color = 'var(--t2)'; }
-    if (desc) desc.textContent = 'Quick Scan: Instant heuristic, ML classifier & Threat Vault (<200ms)';
-    if (scanBtnLabel) scanBtnLabel.textContent = 'Quick Scan';
-    if (icon) icon.textContent = '⚡';
+  if (btnQ && btnD) {
+    if (mode === 'deep') {
+      btnQ.style.background = 'transparent'; btnQ.style.color = 'var(--t2)';
+      btnD.style.background = 'var(--accent)'; btnD.style.color = '#fff';
+      if (desc) desc.textContent = 'Deep Scan: Queries 87+ VirusTotal AV engines & AbuseIPDB (3-6s)';
+      if (scanBtnLabel) scanBtnLabel.textContent = 'Deep Scan (VT)';
+      if (icon) icon.textContent = '🛡️';
+    } else {
+      btnQ.style.background = 'var(--accent)'; btnQ.style.color = '#fff';
+      btnD.style.background = 'transparent'; btnD.style.color = 'var(--t2)';
+      if (desc) desc.textContent = 'Quick Scan: Instant heuristic, ML classifier & Threat Vault (<200ms)';
+      if (scanBtnLabel) scanBtnLabel.textContent = 'Quick Scan';
+      if (icon) icon.textContent = '⚡';
+    }
   }
 }
 
 async function scanEmail(forceDeep = false){
   const raw = document.getElementById('email-input').value.trim();
   if(!raw){errShow('scan-err','Please paste an email first.');return}
-  const isDeep = forceDeep || (_currentScanMode === 'deep');
+  const isDeep = Boolean(forceDeep);
   errShow('scan-err','');
   
   const loaderText = document.getElementById('scan-loader-text');

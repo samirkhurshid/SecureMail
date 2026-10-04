@@ -253,6 +253,116 @@
     .btn-danger{background:var(--red-dim);color:var(--red);border:1px solid rgba(239,68,68,0.3)}
     .btn-danger:hover{background:rgba(239,68,68,0.2)}
 
+    /* ── Deep Scan Pale Yellow Gradient Button ── */
+    .btn-deep-scan{
+      background: linear-gradient(135deg, #fef9c3 0%, #fef08a 45%, #fde047 100%) !important;
+      color: #713f12 !important;
+      font-weight: 700 !important;
+      border: 1px solid rgba(202, 138, 4, 0.45) !important;
+      box-shadow: 0 4px 14px rgba(250, 204, 21, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.6) !important;
+      transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    }
+    .btn-deep-scan svg{
+      width: 15px;
+      height: 15px;
+      stroke: #713f12 !important;
+    }
+    .btn-deep-scan:hover{
+      background: linear-gradient(135deg, #ffffff 0%, #fef08a 40%, #facc15 100%) !important;
+      color: #422006 !important;
+      border-color: rgba(202, 138, 4, 0.7) !important;
+      box-shadow: 0 6px 20px rgba(250, 204, 21, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.8) !important;
+      transform: translateY(-1px) scale(1.01) !important;
+    }
+    .btn-deep-scan:active{
+      transform: translateY(0) scale(0.99) !important;
+      box-shadow: 0 2px 8px rgba(250, 204, 21, 0.25) !important;
+    }
+
+    /* ── Tooltip for Deep Scan Button ── */
+    .deep-scan-container{
+      position: relative;
+      display: inline-flex;
+    }
+    .deep-scan-tooltip{
+      position: absolute;
+      bottom: calc(100% + 10px);
+      left: 50%;
+      transform: translateX(-50%) translateY(6px);
+      width: 270px;
+      background: rgba(15, 23, 42, 0.96);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(250, 204, 21, 0.4);
+      border-radius: 8px;
+      padding: 10px 12px;
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.55), 0 0 16px rgba(250, 204, 21, 0.15);
+      pointer-events: none;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1), transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.2s;
+      z-index: 1000;
+      font-size: 11.5px;
+      line-height: 1.5;
+      text-align: left;
+    }
+    .deep-scan-tooltip::after{
+      content: '';
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      border-width: 6px;
+      border-style: solid;
+      border-color: rgba(250, 204, 21, 0.4) transparent transparent transparent;
+    }
+    .deep-scan-container:hover .deep-scan-tooltip{
+      opacity: 1;
+      visibility: visible;
+      transform: translateX(-50%) translateY(0);
+    }
+    .deep-scan-tooltip .tt-title{
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 700;
+      color: #fef08a;
+      margin-bottom: 4px;
+      font-size: 12px;
+    }
+    .deep-scan-tooltip .tt-desc{
+      color: #cbd5e1;
+      margin-bottom: 6px;
+    }
+    .deep-scan-tooltip .tt-desc strong{
+      color: #ffffff;
+    }
+    .deep-scan-tooltip .tt-badge{
+      font-size: 10px;
+      font-weight: 600;
+      color: #fef08a;
+      background: rgba(250, 204, 21, 0.12);
+      border: 1px solid rgba(250, 204, 21, 0.25);
+      border-radius: 4px;
+      padding: 2px 6px;
+      display: inline-block;
+    }
+
+    body.light-theme .btn-deep-scan{
+      background: linear-gradient(135deg, #fef9c3 0%, #fef08a 45%, #facc15 100%) !important;
+      color: #713f12 !important;
+      border-color: rgba(161, 98, 7, 0.4) !important;
+    }
+    body.light-theme .deep-scan-tooltip{
+      background: #ffffff;
+      border-color: rgba(202, 138, 4, 0.4);
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.15);
+    }
+    body.light-theme .deep-scan-tooltip .tt-title{ color: #854d0e; }
+    body.light-theme .deep-scan-tooltip .tt-desc{ color: #475569; }
+    body.light-theme .deep-scan-tooltip .tt-desc strong{ color: #0f172a; }
+    body.light-theme .deep-scan-tooltip::after{ border-color: rgba(202, 138, 4, 0.4) transparent transparent transparent; }
+
     /* ── Tags ── */
     .tag{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600}
     .tag-critical{background:var(--red-dim);color:var(--red);border:1px solid rgba(239,68,68,0.25)}
@@ -1875,31 +1985,33 @@ From: Security Operations <alerts@security-audit.internal>
 Subject: Urgent: Security Verification Notice
 Authentication-Results: spf=fail; dkim=fail; dmarc=fail" style="width:100%;min-height:130px;resize:vertical;background:rgba(0,0,0,0.2);border:1px solid var(--border);border-radius:var(--r-sm);color:var(--t1);font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.6;padding:12px;outline:none;transition:all 0.18s;display:block;margin-bottom:12px"></textarea>
 
-            <!-- Inspection Depth Selector (Quick <0.2s vs Deep 87+ VT Engines) -->
-            <div style="display:flex;align-items:center;justify-content:space-between;background:rgba(15,23,42,0.6);border:1px solid var(--border);border-radius:var(--r-sm);padding:8px 12px;margin-bottom:12px;gap:10px;flex-wrap:wrap">
-              <div style="display:flex;align-items:center;gap:8px">
-                <span id="scan-mode-icon" style="font-size:16px">⚡</span>
-                <div>
-                  <div style="font-size:12px;font-weight:700;color:var(--t1)">Inspection Depth</div>
-                  <div style="font-size:10.5px;color:var(--t3)" id="scan-mode-desc">Quick Scan: Instant heuristic, ML classifier &amp; Threat Vault (&lt;200ms)</div>
+            <!-- Action Buttons: Clear, Quick Scan, and Deep Scan side-by-side -->
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+              <button class="btn btn-secondary" onclick="clearScan()" title="Clear email text">Clear</button>
+              
+              <!-- Quick Scan Button -->
+              <button class="btn btn-primary" onclick="scanEmail(false)" id="main-scan-btn" title="⚡ Quick Scan: Instant heuristic analysis, ML classifier &amp; Threat Vault (&lt;200ms)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <span>Quick Scan</span>
+              </button>
+
+              <!-- Deep Scan Button with Pale Yellow Gradient and Hover Tooltip -->
+              <div class="deep-scan-container">
+                <button class="btn btn-deep-scan" onclick="scanEmail(true)" id="deep-scan-btn" aria-describedby="deep-scan-tt">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                  <span>Deep Scan</span>
+                </button>
+                <div class="deep-scan-tooltip" id="deep-scan-tt" role="tooltip">
+                  <div class="tt-title">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="width:13px;height:13px;color:#facc15"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                    <span>Deep Threat Inspection</span>
+                  </div>
+                  <div class="tt-desc">
+                    Queries <strong>87+ VirusTotal AV engines</strong> and <strong>AbuseIPDB</strong> database for in-depth threat verification (takes 3–6s).
+                  </div>
+                  <div class="tt-badge">🛡️ Recommended for attachments &amp; unknown links</div>
                 </div>
               </div>
-              <div style="display:inline-flex;background:rgba(0,0,0,0.4);padding:3px;border-radius:6px;border:1px solid rgba(255,255,255,0.08);gap:4px">
-                <button type="button" id="btn-mode-quick" onclick="setScanMode('quick')" class="scan-mode-btn" style="padding:4px 10px;font-size:11.5px;font-weight:600;border-radius:4px;border:none;cursor:pointer;display:flex;align-items:center;gap:5px;transition:all 0.15s;background:var(--accent);color:#fff">
-                  <span>⚡</span> Quick (&lt;0.2s)
-                </button>
-                <button type="button" id="btn-mode-deep" onclick="setScanMode('deep')" class="scan-mode-btn" style="padding:4px 10px;font-size:11.5px;font-weight:600;border-radius:4px;border:none;cursor:pointer;display:flex;align-items:center;gap:5px;transition:all 0.15s;background:transparent;color:var(--t2)">
-                  <span>🛡️</span> Deep (87+ VT Engines)
-                </button>
-              </div>
-            </div>
-
-            <div style="display:flex;gap:8px;margin-bottom:16px">
-              <button class="btn btn-secondary" style="font-size:12px;padding:7px 14px" onclick="clearScan()">Clear</button>
-              <button class="btn btn-primary" onclick="scanEmail()" id="main-scan-btn">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                <span id="scan-btn-label">Quick Scan</span>
-              </button>
             </div>
 
             <!-- URL section -->
@@ -3150,25 +3262,27 @@ function setScanMode(mode) {
   const scanBtnLabel = document.getElementById('scan-btn-label');
   const icon = document.getElementById('scan-mode-icon');
   
-  if (mode === 'deep') {
-    if (btnQ) { btnQ.style.background = 'transparent'; btnQ.style.color = 'var(--t2)'; }
-    if (btnD) { btnD.style.background = 'var(--accent)'; btnD.style.color = '#fff'; }
-    if (desc) desc.textContent = 'Deep Scan: Queries 87+ VirusTotal AV engines & AbuseIPDB (3-6s)';
-    if (scanBtnLabel) scanBtnLabel.textContent = 'Deep Scan (VT)';
-    if (icon) icon.textContent = '🛡️';
-  } else {
-    if (btnQ) { btnQ.style.background = 'var(--accent)'; btnQ.style.color = '#fff'; }
-    if (btnD) { btnD.style.background = 'transparent'; btnD.style.color = 'var(--t2)'; }
-    if (desc) desc.textContent = 'Quick Scan: Instant heuristic, ML classifier & Threat Vault (<200ms)';
-    if (scanBtnLabel) scanBtnLabel.textContent = 'Quick Scan';
-    if (icon) icon.textContent = '⚡';
+  if (btnQ && btnD) {
+    if (mode === 'deep') {
+      btnQ.style.background = 'transparent'; btnQ.style.color = 'var(--t2)';
+      btnD.style.background = 'var(--accent)'; btnD.style.color = '#fff';
+      if (desc) desc.textContent = 'Deep Scan: Queries 87+ VirusTotal AV engines & AbuseIPDB (3-6s)';
+      if (scanBtnLabel) scanBtnLabel.textContent = 'Deep Scan (VT)';
+      if (icon) icon.textContent = '🛡️';
+    } else {
+      btnQ.style.background = 'var(--accent)'; btnQ.style.color = '#fff';
+      btnD.style.background = 'transparent'; btnD.style.color = 'var(--t2)';
+      if (desc) desc.textContent = 'Quick Scan: Instant heuristic, ML classifier & Threat Vault (<200ms)';
+      if (scanBtnLabel) scanBtnLabel.textContent = 'Quick Scan';
+      if (icon) icon.textContent = '⚡';
+    }
   }
 }
 
 async function scanEmail(forceDeep = false){
   const raw = document.getElementById('email-input').value.trim();
   if(!raw){errShow('scan-err','Please paste an email first.');return}
-  const isDeep = forceDeep || (_currentScanMode === 'deep');
+  const isDeep = Boolean(forceDeep);
   errShow('scan-err','');
   
   const loaderText = document.getElementById('scan-loader-text');

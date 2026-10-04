@@ -242,6 +242,116 @@
     .btn-danger{background:var(--red-dim);color:var(--red);border:1px solid rgba(239,68,68,0.3)}
     .btn-danger:hover{background:rgba(239,68,68,0.2)}
 
+    /* ── Deep Scan Pale Yellow Gradient Button ── */
+    .btn-deep-scan{
+      background: linear-gradient(135deg, #fef9c3 0%, #fef08a 45%, #fde047 100%) !important;
+      color: #713f12 !important;
+      font-weight: 700 !important;
+      border: 1px solid rgba(202, 138, 4, 0.45) !important;
+      box-shadow: 0 4px 14px rgba(250, 204, 21, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.6) !important;
+      transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    }
+    .btn-deep-scan svg{
+      width: 15px;
+      height: 15px;
+      stroke: #713f12 !important;
+    }
+    .btn-deep-scan:hover{
+      background: linear-gradient(135deg, #ffffff 0%, #fef08a 40%, #facc15 100%) !important;
+      color: #422006 !important;
+      border-color: rgba(202, 138, 4, 0.7) !important;
+      box-shadow: 0 6px 20px rgba(250, 204, 21, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.8) !important;
+      transform: translateY(-1px) scale(1.01) !important;
+    }
+    .btn-deep-scan:active{
+      transform: translateY(0) scale(0.99) !important;
+      box-shadow: 0 2px 8px rgba(250, 204, 21, 0.25) !important;
+    }
+
+    /* ── Tooltip for Deep Scan Button ── */
+    .deep-scan-container{
+      position: relative;
+      display: inline-flex;
+    }
+    .deep-scan-tooltip{
+      position: absolute;
+      bottom: calc(100% + 10px);
+      left: 50%;
+      transform: translateX(-50%) translateY(6px);
+      width: 270px;
+      background: rgba(15, 23, 42, 0.96);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(250, 204, 21, 0.4);
+      border-radius: 8px;
+      padding: 10px 12px;
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.55), 0 0 16px rgba(250, 204, 21, 0.15);
+      pointer-events: none;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1), transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.2s;
+      z-index: 1000;
+      font-size: 11.5px;
+      line-height: 1.5;
+      text-align: left;
+    }
+    .deep-scan-tooltip::after{
+      content: '';
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      border-width: 6px;
+      border-style: solid;
+      border-color: rgba(250, 204, 21, 0.4) transparent transparent transparent;
+    }
+    .deep-scan-container:hover .deep-scan-tooltip{
+      opacity: 1;
+      visibility: visible;
+      transform: translateX(-50%) translateY(0);
+    }
+    .deep-scan-tooltip .tt-title{
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 700;
+      color: #fef08a;
+      margin-bottom: 4px;
+      font-size: 12px;
+    }
+    .deep-scan-tooltip .tt-desc{
+      color: #cbd5e1;
+      margin-bottom: 6px;
+    }
+    .deep-scan-tooltip .tt-desc strong{
+      color: #ffffff;
+    }
+    .deep-scan-tooltip .tt-badge{
+      font-size: 10px;
+      font-weight: 600;
+      color: #fef08a;
+      background: rgba(250, 204, 21, 0.12);
+      border: 1px solid rgba(250, 204, 21, 0.25);
+      border-radius: 4px;
+      padding: 2px 6px;
+      display: inline-block;
+    }
+
+    body.light-theme .btn-deep-scan{
+      background: linear-gradient(135deg, #fef9c3 0%, #fef08a 45%, #facc15 100%) !important;
+      color: #713f12 !important;
+      border-color: rgba(161, 98, 7, 0.4) !important;
+    }
+    body.light-theme .deep-scan-tooltip{
+      background: #ffffff;
+      border-color: rgba(202, 138, 4, 0.4);
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.15);
+    }
+    body.light-theme .deep-scan-tooltip .tt-title{ color: #854d0e; }
+    body.light-theme .deep-scan-tooltip .tt-desc{ color: #475569; }
+    body.light-theme .deep-scan-tooltip .tt-desc strong{ color: #0f172a; }
+    body.light-theme .deep-scan-tooltip::after{ border-color: rgba(202, 138, 4, 0.4) transparent transparent transparent; }
+
     /* ── Tags ── */
     .tag{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600}
     .tag-critical{background:var(--red-dim);color:var(--red);border:1px solid rgba(239,68,68,0.25)}
