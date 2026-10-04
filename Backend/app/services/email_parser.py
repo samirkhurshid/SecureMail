@@ -220,6 +220,23 @@ def parse_raw_email(raw: str) -> dict:
     }
 
 
+def _is_same_org_domain(d1: str, d2: str) -> bool:
+    """Checks if two domains share the same organizational root domain (e.g. e-mails.microsoft.com and microsoft.com)."""
+    if not d1 or not d2:
+        return False
+    d1 = d1.strip().lower()
+    d2 = d2.strip().lower()
+    if d1 == d2:
+        return True
+    if d1.endswith("." + d2) or d2.endswith("." + d1):
+        return True
+    p1 = [p for p in d1.split(".") if p]
+    p2 = [p for p in d2.split(".") if p]
+    if len(p1) >= 2 and len(p2) >= 2:
+        return ".".join(p1[-2:]) == ".".join(p2[-2:])
+    return False
+
+
 def _extract_headers(msg) -> dict:
     """Extract and decode key email headers."""
     def decode(value: Optional[str]) -> str:
@@ -258,7 +275,7 @@ def _extract_headers(msg) -> dict:
         "display_name_spoof": display_name_spoof,
         "reply_to": reply_to,
         "reply_to_domain": reply_domain,
-        "reply_to_mismatch": bool(reply_domain and reply_domain != from_domain),
+        "reply_to_mismatch": bool(reply_domain and not _is_same_org_domain(reply_domain, from_domain)),
         "return_path": return_path,
         "subject": decode(msg.get("Subject", "")),
         "date": decode(msg.get("Date", "")),
@@ -405,17 +422,22 @@ def _analyse_phishing(headers: dict, body_text: str, body_html: str, urls: List)
     # Also check if SENDER domain is a lookalike (even with no URLs in body)
     from_domain = headers.get("from_domain", "").lower()
     sender_lookalike = False
-    for brand, official in BRAND_IMPERSONATION.items():
-        if brand in from_domain and official != from_domain and from_domain != "":
+    domain_impersonation = False
+    impersonated_brand = None
+
+    if from_domain:
+        from_verdict = evaluate_domain_homograph(from_domain)
+        if from_verdict.get("is_lookalike"):
             sender_lookalike = True
             domain_lookalike = True
-            break
-
-    if domain_lookalike:
-        if sender_lookalike:
+            domain_impersonation = True
+            impersonated_brand = from_verdict.get("spoofed_brand")
             indicators.append(f"sender domain is a brand lookalike ({from_domain})")
-        else:
-            indicators.append("brand lookalike domain in links")
+            techniques.append("T1566.001 (Spearphishing — Lookalike Domain)")
+            techniques.append("T1036 (Masquerading — Domain Spoof)")
+
+    if domain_lookalike and not sender_lookalike:
+        indicators.append("brand lookalike domain in links")
         techniques.append("T1566.001 (Spearphishing — Lookalike Domain)")
         techniques.append("T1036 (Masquerading)")
 
@@ -470,24 +492,9 @@ def _analyse_phishing(headers: dict, body_text: str, body_html: str, urls: List)
     if do_not_contact:
         indicators.append("instruction to not contact authorities")
 
-    # ── Sender domain impersonation ───────────────────────────
-    from_domain = headers.get("from_domain", "").lower()
-    domain_impersonation = False
-    impersonated_brand = None
-    for brand, official in BRAND_IMPERSONATION.items():
-        if brand in from_domain and official != from_domain:
-            domain_impersonation = True
-            impersonated_brand = brand
-            indicators.append(f"sender domain impersonates {brand} ({official})")
-            techniques.append("T1036 (Masquerading — Domain Spoof)")
-            break
-
-    # ── Weighted keyword score ────────────────────────────────
-    keyword_hits = {}
-    content_lower = content.lower()
-    for kw, weight in PHISHING_WEIGHTS.items():
-        if kw.lower() in content_lower:
-            keyword_hits[kw] = weight
+    # ── Weighted keyword score with deduplication & legal masking ──
+    kw_score, kw_matches = scan_weighted_keywords(content)
+    keyword_hits = {m["keyword"]: m["weight"] for m in kw_matches}
 
     return {
         "urgency_language": urgency,
@@ -618,18 +625,38 @@ def _check_domain_lookalike(domain: str) -> Tuple[bool, Optional[str]]:
 
 def audit_received_hops(received_headers: list) -> dict:
     """
-    Audits the Received relay chain in the email headers.
-    Returns audit statistics and a list of identified anomalies.
+    Audits the Received relay chain in email headers with geolocation,
+    chronological latency analysis, and trajectory modeling.
     """
+    from app.services.geoip_service import analyze_hop_trajectory, geolocate_ip, parse_header_timestamp
     import re
     import ipaddress
 
-    anomalies = []
-    parsed_hops = []
+    if not received_headers:
+        return {
+            "hop_count": 0,
+            "hops": [],
+            "anomalies": [],
+            "trajectory": {
+                "total_hops": 0,
+                "total_transit_seconds": 0,
+                "origin_country": "Unknown",
+                "origin_ip": None,
+                "destination_country": "Unknown",
+                "destination_ip": None,
+                "trajectory_coordinates": [],
+                "hops": [],
+                "anomalies": []
+            }
+        }
+
+    trajectory = analyze_hop_trajectory(received_headers)
     
+    # Also build index-preserved parsed_hops for backward compatibility
     ip_pattern = re.compile(r"\[(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\]")
     from_by_pattern = re.compile(r"from\s+(\S+)\s+by\s+(\S+)", re.IGNORECASE)
-
+    
+    parsed_hops = []
     for i, header in enumerate(received_headers):
         header_str = str(header)
         ips = ip_pattern.findall(header_str)
@@ -647,47 +674,91 @@ def audit_received_hops(received_headers: list) -> dict:
             except ValueError:
                 continue
                 
+        geo = geolocate_ip(hop_ip, host_hint=f"{declared_from} {received_by}") if hop_ip else {}
+        dt = parse_header_timestamp(header_str)
+        
         parsed_hops.append({
             "hop": len(received_headers) - i,
+            "hop_number": len(received_headers) - i,
             "raw": header_str[:200],
             "from": declared_from,
             "by": received_by,
-            "ip": hop_ip
+            "ip": hop_ip,
+            "timestamp": dt.isoformat() if dt else None,
+            "city": geo.get("city", "Unknown"),
+            "country": geo.get("country", "Unknown"),
+            "country_code": geo.get("country_code", "XX"),
+            "latitude": geo.get("latitude", 0.0),
+            "longitude": geo.get("longitude", 0.0),
+            "isp": geo.get("isp", "Unknown"),
+            "asn": geo.get("asn", "Unknown"),
+            "is_private": geo.get("is_private", False)
         })
-
-    if len(received_headers) > 5:
-        anomalies.append(f"Unusually long relay chain ({len(received_headers)} hops)")
-    if len(received_headers) == 0:
-        anomalies.append("No Received headers found (likely direct client submission)")
 
     return {
         "hop_count": len(received_headers),
         "hops": parsed_hops,
-        "anomalies": anomalies
+        "anomalies": trajectory.get("anomalies", []),
+        "trajectory": trajectory
     }
+
+
+CONFIDENTIALITY_DISCLAIMER_PATTERNS = [
+    re.compile(r"this\s+email\s+and\s+any\s+(?:attachments|files|associated\s+files)\s+are\s+confidential[^\n\r\.]{0,300}", re.IGNORECASE),
+    re.compile(r"intended\s+solely\s+for\s+the\s+use\s+of\s+the\s+individual[^\n\r\.]{0,300}", re.IGNORECASE),
+    re.compile(r"if\s+you\s+(?:have\s+)?received\s+this\s+(?:email|message)\s+in\s+error[^\n\r\.]{0,300}", re.IGNORECASE),
+    re.compile(r"any\s+unauthorized\s+(?:access|disclosure|copying|distribution|use)\s+is\s+(?:strictly\s+)?prohibited[^\n\r\.]{0,300}", re.IGNORECASE),
+    re.compile(r"strictly\s+confidential\s+and\s+may\s+be\s+legally\s+privileged[^\n\r\.]{0,300}", re.IGNORECASE),
+]
+
+
+def _mask_legal_disclaimers(text: str) -> str:
+    """Removes standard corporate/legal confidentiality disclaimers to prevent false positive keyword hits."""
+    masked = text
+    for pat in CONFIDENTIALITY_DISCLAIMER_PATTERNS:
+        masked = pat.sub(" ", masked)
+    return masked
 
 
 def scan_weighted_keywords(content: str) -> Tuple[int, List[Dict]]:
     """
-    Scans content for weighted phishing keywords.
+    Scans content for weighted phishing keywords with longest-match-first deduplication
+    and legal disclaimer masking.
     Returns (total_threat_score, list_of_matches).
     """
+    cleaned_content = _mask_legal_disclaimers(content or "")
+    content_lower = cleaned_content.lower()
+    
     total_score = 0
     matches = []
-    content_lower = content.lower()
+    matched_spans = []  # To prevent substring collisions (e.g. 'unauthorized' vs 'unauthorized access')
     
-    for word, weight in PHISHING_WEIGHTS.items():
-        count = content_lower.count(word)
-        if count > 0:
-            word_score = count * weight
+    # Sort keywords by length descending (longest phrases first)
+    sorted_keywords = sorted(PHISHING_WEIGHTS.items(), key=lambda x: len(x[0]), reverse=True)
+    
+    for word, weight in sorted_keywords:
+        pattern = re.compile(r"\b" + re.escape(word.lower()) + r"\b", re.IGNORECASE)
+        word_matches = list(pattern.finditer(content_lower))
+        
+        valid_count = 0
+        for m in word_matches:
+            start, end = m.span()
+            # Verify this match does not overlap with an already captured longer phrase
+            if not any(s <= start < e or s < end <= e for s, e in matched_spans):
+                valid_count += 1
+                matched_spans.append((start, end))
+                
+        if valid_count > 0:
+            word_score = valid_count * weight
             total_score += word_score
             matches.append({
                 "keyword": word,
-                "count": count,
+                "count": valid_count,
                 "weight": weight,
                 "score": word_score
             })
             
-    # Normalize score based on a standard benchmark total
-    normalized_score = min(100, int((total_score / 40) * 100))
+    # Normalize score based on standard benchmark
+    normalized_score = min(100, int((total_score / 45) * 100))
     return normalized_score, sorted(matches, key=lambda m: m["score"], reverse=True)
+

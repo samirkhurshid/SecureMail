@@ -85,11 +85,50 @@ async def get_log(log_id: str, user: CurrentUser = Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Log not found")
     return log
 
+
+from app.services import audit_service
+from app.services.rbac_service import require_permission
+
+
+@router.get("/{log_id}/pdf", summary="Export stored forensic record as executive PDF report")
+async def export_log_pdf(log_id: str, user: CurrentUser = Depends(get_current_user)):
+    from app.services import report_generator
+    log = forensics_service.get_log_by_id(log_id, user_id=user.uid)
+    if not log:
+        raise HTTPException(status_code=404, detail="Log not found")
+        
+    audit_service.log_audit_event(
+        event_type=audit_service.EVENT_PDF_REPORT_EXPORT,
+        user_id=user.uid,
+        user_email=user.email,
+        user_role=user.role,
+        resource_id=log_id,
+        details={"incident_id": log.get("scan_id", log_id), "risk_score": log.get("risk_score")}
+    )
+    
+    pdf_bytes = report_generator.generate_forensic_pdf(log, incident_id=log.get("scan_id", log_id))
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="SecureMail-Incident-{log_id}.pdf"'}
+    )
+
+
 @router.delete("/{log_id}")
-async def delete_log(log_id: str, user: CurrentUser = Depends(get_current_user)):
+async def delete_log(log_id: str, user: CurrentUser = Depends(require_permission("forensics:delete"))):
     success = forensics_service.delete_log_by_id(log_id, user_id=user.uid)
     if not success:
         raise HTTPException(status_code=404, detail="Log not found")
+        
+    audit_service.log_audit_event(
+        event_type=audit_service.EVENT_LOG_DELETE,
+        user_id=user.uid,
+        user_email=user.email,
+        user_role=user.role,
+        resource_id=log_id,
+        details={"status": "deleted"}
+    )
+    
     return {"status": "success", "message": f"Log {log_id} deleted"}
 
 

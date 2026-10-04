@@ -21,6 +21,15 @@ def check_rate_limit(key: str, max_requests: int, window_seconds: int) -> bool:
     Check if a key has exceeded max_requests within window_seconds.
     Returns True if allowed, False if limit exceeded.
     """
+    allowed, _ = check_rate_limit_with_retry(key, max_requests, window_seconds)
+    return allowed
+
+
+def check_rate_limit_with_retry(key: str, max_requests: int, window_seconds: int) -> tuple[bool, int]:
+    """
+    Check rate limit and calculate retry-after seconds if exceeded.
+    Returns (True, 0) if allowed, or (False, retry_after_seconds) if exceeded.
+    """
     now = time.time()
     cutoff = now - window_seconds
 
@@ -32,11 +41,12 @@ def check_rate_limit(key: str, max_requests: int, window_seconds: int) -> bool:
 
     if len(timestamps) >= max_requests:
         _REQUEST_TIMESTAMPS[key] = timestamps
-        return False
+        retry_after = max(1, int(timestamps[0] + window_seconds - now))
+        return False, retry_after
 
     timestamps.append(now)
     _REQUEST_TIMESTAMPS[key] = timestamps
-    return True
+    return True, 0
 
 
 def get_client_ip(request: Request) -> str:
@@ -59,16 +69,19 @@ def get_client_ip(request: Request) -> str:
 def rate_limit(max_requests: int = 10, window_seconds: int = 60):
     """
     FastAPI dependency factory for rate limiting by client IP.
+    Returns HTTP 429 with Retry-After header when exceeded.
     """
     async def dependency(request: Request):
         client_ip = get_client_ip(request)
         rate_key = f"{request.url.path}:{client_ip}"
         
-        if not check_rate_limit(rate_key, max_requests, window_seconds):
-            logger.warning(f"Rate limit exceeded for IP {client_ip} on {request.url.path}")
+        allowed, retry_after = check_rate_limit_with_retry(rate_key, max_requests, window_seconds)
+        if not allowed:
+            logger.warning(f"Rate limit exceeded for IP {client_ip} on {request.url.path} (retry in {retry_after}s)")
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail="Too many requests. Please try again shortly."
+                detail=f"Too many requests. Please try again in {retry_after} seconds.",
+                headers={"Retry-After": str(retry_after)}
             )
 
     return dependency

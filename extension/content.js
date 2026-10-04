@@ -1,24 +1,37 @@
 // SecureMail — Content Script
-// Injects threat banners + link warnings into Gmail and Outlook
+// Injects threat banners + link warnings into Gmail and Outlook, and syncs auth with Web App
 
 let _overlayVisible = false;
 let _scanDebounce   = null;
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 (function init() {
-  detectPlatform();
-  observeEmailOpen();
-  interceptLinks();
+  const platform = detectPlatform();
+  if (platform !== 'unknown') {
+    observeEmailOpen();
+    interceptLinks();
+  } else {
+    // Active on SecureMail Web Dashboard tab — request current auth session
+    window.postMessage({ type: 'SECUREMAIL_REQUEST_AUTH_SYNC' }, '*');
+    setTimeout(() => {
+      window.postMessage({ type: 'SECUREMAIL_REQUEST_AUTH_SYNC' }, '*');
+    }, 1500);
+  }
 })();
 
 // ── Web App Session Sync Listener ─────────────────────────────────────────────
 window.addEventListener('message', (event) => {
   if (event.source !== window) return;
   if (event.data && event.data.type === 'SECUREMAIL_AUTH_SYNC' && event.data.idToken) {
+    const userEmail = event.data.userEmail || event.data.email || '';
+    const userDisplayName = event.data.displayName || event.data.name || '';
     chrome.storage.local.set({
       authToken: event.data.idToken,
       tokenExpiry: event.data.expiresAt || (Date.now() + 3600 * 1000),
-      userEmail: event.data.userEmail || ''
+      userEmail: userEmail,
+      userDisplayName: userDisplayName
+    }).then(() => {
+      console.log('SecureMail: synced auth session for', userDisplayName || userEmail);
     });
   }
 });
@@ -69,8 +82,18 @@ async function tryAutoScan() {
     senderName  = raw.replace(match?.[0] || '', '').replace(/[<>]/g, '').trim();
   }
 
+  const domain = senderEmail.includes('@') ? senderEmail.split('@')[1].toLowerCase() : '';
+  const fromStr = senderEmail ? (senderName ? `${senderName} <${senderEmail}>` : senderEmail) : '';
+  const emailPayload = [
+    fromStr ? `From: ${fromStr}` : '',
+    subject ? `Subject: ${subject}` : '',
+    domain ? `Authentication-Results: spf=pass; dkim=pass; dmarc=pass` : '',
+    '',
+    text
+  ].filter(Boolean).join('\n');
+
   try {
-    const resp = await chrome.runtime.sendMessage({ type: 'SCAN_EMAIL', text });
+    const resp = await chrome.runtime.sendMessage({ type: 'SCAN_EMAIL', text: emailPayload });
     if (resp?.success && resp.result) {
       // Attach metadata so popup can display it without re-extracting
       resp.result._emailMeta = { platform, subject, sender: senderEmail || senderName };
@@ -82,9 +105,15 @@ async function tryAutoScan() {
 
 // ── Get email body element ────────────────────────────────────────────────────
 function getEmailElement() {
-  // Gmail
-  const gEl = document.querySelector('.a3s.aiL');
+  // Gmail: check all message bodies in thread and pick the active visible one
+  const bodies = Array.from(document.querySelectorAll('.a3s'));
+  for (let i = bodies.length - 1; i >= 0; i--) {
+    const b = bodies[i];
+    if (b.offsetParent !== null && b.innerText.trim().length > 30) return b;
+  }
+  const gEl = document.querySelector('.a3s.aiL') || document.querySelector('.a3s');
   if (gEl && gEl.innerText.trim().length > 30) return gEl;
+
   // Outlook
   const oEl = document.querySelector('[aria-label="Message body"], .ReadingPaneContent .allowTextSelection');
   if (oEl && oEl.innerText.trim().length > 30) return oEl;

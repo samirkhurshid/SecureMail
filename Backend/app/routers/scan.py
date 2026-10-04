@@ -10,7 +10,7 @@ import time
 import asyncio
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends, Request
 from app.models.schemas import EmailScanRequest, URLScanRequest, IPCheckRequest
-from app.services import virustotal, abuseipdb, email_parser, risk_scorer, usage_tracker, qr_scanner, homograph_service, ml_classifier
+from app.services import virustotal, abuseipdb, email_parser, risk_scorer, usage_tracker, qr_scanner, homograph_service, ml_classifier, threat_intel_service, enrichment_service, audit_service, dns_auth_service
 from app.services.forensics import save_forensic_log
 from app.services.simple_rate_limiter import get_client_ip
 from app.services.anonymous_quota import check_and_increment_anon_quota, get_anon_quota, get_next_reset_time_ist
@@ -145,8 +145,8 @@ async def scan_email(
     Run a full security scan on a raw email.
     Supports both authenticated scanning (unlimited) and anonymous trial scanning (5 free scans/day per IP).
     """
+    client_ip = get_client_ip(http_request)
     if user is None:
-        client_ip = get_client_ip(http_request)
         allowed, current_count = check_and_increment_anon_quota(client_ip)
         if not allowed:
             raise HTTPException(
@@ -162,7 +162,7 @@ async def scan_email(
     scan_id = str(uuid.uuid4())
     logger.info(f"[{scan_id}] Starting email scan for user {user.uid if user else 'anonymous'}")
 
-    # ── Step 1: Parse ─────────────────────────────────────────────
+    # ── Step 1: Input Parsing & Structural Extraction ─────────────
     parsed = {}
     if request.raw_email:
         parsed = email_parser.parse_raw_email(request.raw_email)
@@ -176,12 +176,13 @@ async def scan_email(
 
     # Override with explicit fields if provided
     sender_email = request.sender_email or headers.get("from_email", "")
+    sender_domain = headers.get("from_domain", "") or (sender_email.split("@")[1].lower() if "@" in sender_email else "")
     subject = request.subject or headers.get("subject", "")
 
     if not sender_email and not request.raw_email and not request.headers_raw:
         raise HTTPException(status_code=400, detail="Provide raw_email, headers_raw, or sender_email")
 
-    # ── Step 2: Authentication ────────────────────────────────────
+    # ── Step 2: Authentication Header Parsing (SPF / DKIM / DMARC) ─
     auth_raw = headers.get("authentication_results", "")
     auth = email_parser.parse_auth_header(auth_raw)
 
@@ -189,7 +190,15 @@ async def scan_email(
     if headers.get("dkim_signature") and auth.get("dkim") == "unknown":
         auth["dkim"] = "present_unverified"
 
-    # ── Step 3: IP reputation ─────────────────────────────────────
+    # If SPF or DMARC are unknown (e.g. email scanned via browser extension reading pane),
+    # query real-time DNS records for the sender domain
+    if sender_domain and (auth.get("spf") in ("unknown", None) or auth.get("dmarc") in ("unknown", None)):
+        dns_auth = await dns_auth_service.verify_domain_dns_auth(sender_domain)
+        for k, v in dns_auth.items():
+            if auth.get(k) in ("unknown", None) and v != "unknown":
+                auth[k] = v
+
+    # ── Step 3: Originating IP Abuse Reputation Lookup ─────────────
     originating_ip = (
         headers.get("originating_ip")
         or headers.get("x_originating_ip")
@@ -200,7 +209,7 @@ async def scan_email(
         logger.info(f"[{scan_id}] Checking IP: {originating_ip}")
         ip_result = await abuseipdb.check_ip(originating_ip)
 
-    # ── Step 4: URL scanning ─────────────────────────────────────
+    # ── Step 4: URL Extraction & Reputation Scanning (VirusTotal) ──
     url_results = []
     urls_skipped = 0
     if raw_urls:
@@ -214,7 +223,7 @@ async def scan_email(
             entry = {**u, "vt_result": vt if not isinstance(vt, Exception) else {"error": str(vt)}}
             url_results.append(entry)
 
-    # ── Step 5: Attachment hash lookup ───────────────────────────
+    # ── Step 5: Attachment Hash Lookup (VirusTotal) ────────────────
     attachment_results = []
     if raw_attachments:
         logger.info(f"[{scan_id}] Checking {len(raw_attachments)} attachment hashes")
@@ -222,7 +231,7 @@ async def scan_email(
             vt_att = await virustotal.scan_file_hash(att["sha256"])
             attachment_results.append({**att, "vt_result": vt_att})
 
-    # ── Step 5.5: Quishing (QR Code) Security Analysis ───────────
+    # ── Step 6: Optical Quishing (QR Code) Security Analysis ───────
     quishing_result = {"has_qr_codes": False, "qr_count": 0, "risk_level": "clean", "risk_score": 0, "detections": []}
     if request.raw_email:
         try:
@@ -249,7 +258,42 @@ async def scan_email(
     hop_audit = parsed.get("received_hop_audit")
     weighted_phishing = parsed.get("weighted_phishing_analysis")
 
-    # ── Step 6: Risk scoring ──────────────────────────────────────
+    # ── Step 7: Real-Time Threat Vault Intelligence Cross-Referencing ──
+    threat_intel_matches = []
+    from_dom = headers.get("from_domain", "")
+    if from_dom:
+        dom_match = threat_intel_service.lookup_ioc(from_dom, "domain")
+        if dom_match:
+            threat_intel_matches.append({**dom_match, "matched_target": "sender_domain", "query": from_dom})
+            
+    if originating_ip:
+        ip_match = threat_intel_service.lookup_ioc(originating_ip, "ip")
+        if ip_match:
+            threat_intel_matches.append({**ip_match, "matched_target": "originating_ip", "query": originating_ip})
+            
+    for u in raw_urls:
+        u_str = u.get("url", "")
+        u_dom = u.get("domain", "")
+        if u_str:
+            url_match = threat_intel_service.lookup_ioc(u_str, "url")
+            if url_match and not any(m.get("query") == u_str for m in threat_intel_matches):
+                threat_intel_matches.append({**url_match, "matched_target": "url", "query": u_str})
+        if u_dom and u_dom != from_dom:
+            dom_match = threat_intel_service.lookup_ioc(u_dom, "domain")
+            if dom_match and not any(m.get("query") == u_dom for m in threat_intel_matches):
+                threat_intel_matches.append({**dom_match, "matched_target": "url_domain", "query": u_dom})
+                
+    for att in raw_attachments:
+        sha = att.get("sha256")
+        if sha:
+            hash_match = threat_intel_service.lookup_ioc(sha, "sha256")
+            if hash_match:
+                threat_intel_matches.append({**hash_match, "matched_target": "attachment_hash", "filename": att.get("filename"), "query": sha})
+
+    # ── Step 8: Domain Infrastructure & Age Metadata Enrichment ───
+    domain_enrichment = enrichment_service.enrich_domain_metadata(from_dom) if from_dom else {}
+
+    # ── Step 9: Primary Confidence-Weighted Risk Scoring ──────────
     score, risk_level, threat_types = risk_scorer.compute_email_risk_score(
         auth=auth,
         phishing=phishing,
@@ -259,11 +303,11 @@ async def scan_email(
         headers=headers,
         hop_audit=hop_audit,
         weighted_phishing=weighted_phishing,
+        threat_intel_matches=threat_intel_matches,
     )
 
-    # ── Step 5.6: IDN Homograph & Typosquatting Analysis ────────
+    # ── Step 10: IDN Homograph & Typosquatting Analysis (Score Adjustment) ──
     homograph_alerts = []
-    from_dom = headers.get("from_domain", "")
     if from_dom:
         from_verdict = homograph_service.evaluate_domain_homograph(from_dom)
         if from_verdict.get("is_lookalike"):
@@ -301,12 +345,13 @@ async def scan_email(
         elif score >= 55:
             risk_level = "high"
 
-    # ── Step 5.7: Local ML Phishing Classifier Inference (< 5ms) ───
+    # ── Step 11: Pattern-Based Probabilistic Risk Scoring (Heuristic Signal) ─
     ml_prediction = ml_classifier.predict_phishing_probability(
         parsed,
         extra_heuristics={
             "quishing": quishing_result,
             "hop_audit": hop_audit,
+            "threat_intel_matches": threat_intel_matches,
         }
     )
     if ml_prediction.get("is_phishing") and ml_prediction.get("probability", 0) >= 0.70:
@@ -319,7 +364,7 @@ async def scan_email(
             elif score >= 55:
                 risk_level = "high"
 
-    # Incorporate Quishing risk score & threat classification
+    # ── Step 12: Quishing Risk Score Incorporation & Threat Typing ─
     if quishing_result.get("has_qr_codes") and quishing_result.get("risk_score", 0) >= 35:
         score = max(score, quishing_result["risk_score"])
         if "quishing" not in threat_types:
@@ -331,6 +376,9 @@ async def scan_email(
         elif score >= 35:
             risk_level = "medium"
 
+    # ── Step 13: Final Risk Aggregation & Executive Summary ────────
+    # Note: Base risk scoring, homograph impersonation, pattern-based probabilistic scoring,
+    # and quishing risk scores have all been reconciled and folded into `score` and `threat_types`.
     summary = risk_scorer.summarise(score, risk_level, threat_types)
     duration_ms = round((time.time() - start) * 1000)
 
@@ -366,13 +414,24 @@ async def scan_email(
         "quishing": quishing_result,
         "homograph_alerts": homograph_alerts,
         "ml_prediction": ml_prediction,
+        "threat_intel_matches": threat_intel_matches,
+        "domain_enrichment": domain_enrichment,
     }
 
-    # ── Step 7: Auto-save forensic log & record scan usage for real scans ────────────
+    # ── Step 14: Automated Forensic Logging, Audit Trail & Alert Dispatch ──
     if user and user.uid:
         background_tasks.add_task(usage_tracker.record_scan_usage, user.uid)
-        if risk_level not in ("clean", "unknown"):
-            background_tasks.add_task(save_forensic_log, result, user.uid)
+        background_tasks.add_task(
+            audit_service.log_audit_event,
+            event_type=audit_service.EVENT_SCAN_EMAIL,
+            user_id=user.uid,
+            user_email=user.email,
+            user_role=getattr(user, "role", "user"),
+            ip_address=client_ip,
+            resource_id=scan_id,
+            details={"risk_score": score, "risk_level": risk_level, "sender": sender_email, "subject": subject}
+        )
+        background_tasks.add_task(save_forensic_log, result, user.uid)
 
         if risk_level in ("high", "critical"):
             from app.services import user_service, webhook_notifier
@@ -392,9 +451,8 @@ async def scan_url(
     http_request: Request,
     user: Optional[CurrentUser] = Depends(get_optional_user)
 ) -> Dict[str, Any]:
-    """Submit a URL to VirusTotal and return detection statistics."""
+    client_ip = get_client_ip(http_request)
     if user is None:
-        client_ip = get_client_ip(http_request)
         allowed, current_count = check_and_increment_anon_quota(client_ip)
         if not allowed:
             raise HTTPException(
@@ -408,9 +466,28 @@ async def scan_url(
 
     logger.info(f"URL scan request: {request.url}")
     result = await virustotal.scan_url(request.url)
+    
+    # Check local Threat Vault for instant zero-day hit
+    vault_match = threat_intel_service.lookup_ioc(request.url, "url")
+    
     if user and user.uid:
         background_tasks.add_task(usage_tracker.record_scan_usage, user.uid)
-    return {"url": request.url, "scan_result": result}
+        background_tasks.add_task(
+            audit_service.log_audit_event,
+            event_type=audit_service.EVENT_SCAN_URL,
+            user_id=user.uid,
+            user_email=user.email,
+            user_role=getattr(user, "role", "user"),
+            ip_address=client_ip,
+            resource_id=request.url,
+            details={"is_threat": bool(vault_match) or (isinstance(result, dict) and result.get("detections", 0) > 0)}
+        )
+    return {
+        "url": request.url,
+        "scan_result": result,
+        "threat_intel_match": vault_match,
+        "is_threat": bool(vault_match) or (isinstance(result, dict) and result.get("detections", 0) > 0)
+    }
 
 
 @router.post("/ip", summary="Check IP reputation via AbuseIPDB", response_model=Dict[str, Any])
@@ -426,10 +503,14 @@ async def check_ip(request: IPCheckRequest) -> Dict[str, Any]:
 
 
 @router.get("/demo", summary="Run a demo scan with sample phishing email")
-async def demo_scan(http_request: Request, user: CurrentUser = Depends(get_current_user)):
+async def demo_scan(
+    background_tasks: BackgroundTasks,
+    http_request: Request,
+    user: CurrentUser = Depends(get_current_user)
+):
     """
     Runs a scan on a built-in phishing email sample — useful for testing.
-    Demo scans do NOT persist to the user's forensic log history.
+    Persists forensic telemetry to the authenticated user's log history.
     """
     sample_eml = """From: PayPal Support <noreply@paypa1-support.ru>
 Reply-To: help@secure-login.net
@@ -456,9 +537,26 @@ Your account will be closed in 24 hours if no action is taken.
 PayPal Security Team
 """
     req = EmailScanRequest(raw_email=sample_eml)
-    # Pass empty background tasks to prevent demo scans from being saved to forensics
-    dummy_bg = BackgroundTasks()
-    return await scan_email(request=req, background_tasks=dummy_bg, http_request=http_request, user=user)
+    return await scan_email(request=req, background_tasks=background_tasks, http_request=http_request, user=user)
+
+
+@router.post("/report/pdf", summary="Generate on-demand executive SOC PDF report from live scan result")
+async def generate_scan_pdf(result: Dict[str, Any]):
+    """
+    Accepts scan result JSON and renders a high-fidelity executive SOC PDF report.
+    """
+    from app.services import report_generator
+    from fastapi.responses import StreamingResponse
+    import io
+    if not result:
+        raise HTTPException(status_code=400, detail="Scan result payload required")
+    inc_id = result.get("scan_id") or result.get("id") or "LIVE-SCAN"
+    pdf_bytes = report_generator.generate_forensic_pdf(result, incident_id=inc_id)
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="SecureMail-Report-{inc_id}.pdf"'}
+    )
 
 
 def _collect_anomalies(headers: dict, auth: dict) -> list:

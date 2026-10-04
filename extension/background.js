@@ -1,7 +1,8 @@
 // SecureMail — Background Service Worker
 // Handles: context menus, notifications, badge state, message passing
 
-const DEFAULT_API = 'http://localhost:8000/api';
+const PRODUCTION_API_URL = 'https://securemail-backend.onrender.com';
+const DEFAULT_API = `${PRODUCTION_API_URL}/api`;
 
 // ── Install: create context menus ─────────────────────────────────────────────
 chrome.runtime.onInstalled.addListener(() => {
@@ -106,20 +107,33 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
 // ── Web App Session Sync Listener ───────────────────────────────────────────
 chrome.runtime.onMessageExternal.addListener((msg, sender, sendResponse) => {
-  const allowedOrigins = ['http://localhost:8000', 'http://127.0.0.1:8000'];
-  if (sender.origin && !allowedOrigins.some(o => sender.origin.startsWith(o))) {
-    console.warn('SecureMail background: rejected external message from untrusted origin', sender.origin);
+  const allowedOrigins = [
+    'http://localhost:8000',
+    'http://127.0.0.1:8000',
+    'https://securemail-backend.onrender.com'
+  ];
+  const origin = sender?.origin ? sender.origin.replace(/\/+$/, '') : '';
+  const isAllowed = origin && (
+    allowedOrigins.includes(origin) ||
+    origin.endsWith('.onrender.com')
+  );
+
+  if (!isAllowed) {
+    console.warn('SecureMail background: rejected external message from untrusted origin', sender?.origin);
     sendResponse({ success: false, error: 'Unauthorized origin' });
     return;
   }
 
   if (msg.type === 'SECUREMAIL_AUTH_SYNC' && msg.idToken) {
+    const userEmail = msg.userEmail || msg.email || '';
+    const userDisplayName = msg.displayName || msg.name || '';
     chrome.storage.local.set({
       authToken: msg.idToken,
       tokenExpiry: msg.expiresAt || (Date.now() + 3600 * 1000),
-      userEmail: msg.userEmail || ''
+      userEmail: userEmail,
+      userDisplayName: userDisplayName
     }).then(() => {
-      console.log('SecureMail background: synced auth session from Web App');
+      console.log('SecureMail background: synced auth session from Web App (' + (userDisplayName || userEmail) + ')');
       sendResponse({ success: true });
     }).catch(err => {
       sendResponse({ success: false, error: err.message });
@@ -129,9 +143,9 @@ chrome.runtime.onMessageExternal.addListener((msg, sender, sendResponse) => {
 });
 
 async function getFirebaseKey() {
-  const data = await chrome.storage.local.get(['firebaseApiKey', 'apiBaseUrl']);
+  const data = await chrome.storage.local.get(['firebaseApiKey']);
   if (data.firebaseApiKey) return data.firebaseApiKey;
-  const baseUrl = data.apiBaseUrl || 'http://localhost:8000/api';
+  const baseUrl = await getApiBase();
   try {
     const resp = await fetch(`${baseUrl}/auth/config`);
     if (resp.ok) {
@@ -298,7 +312,7 @@ function showNotification(title, message, type) {
 async function checkHealth() {
   try {
     const base = await getApiBase();
-    const r = await fetch(base.replace('/api', '') + '/health', {
+    const r = await fetch(base.replace(/\/api\/?$/, '') + '/health', {
       signal: AbortSignal.timeout(3000),
     });
     const d = await r.json();
@@ -309,6 +323,19 @@ async function checkHealth() {
 }
 
 async function getApiBase() {
-  const s = await chrome.storage.local.get('backend');
-  return (s.backend || 'http://localhost:8000') + '/api';
+  try {
+    const s = await chrome.storage.local.get(['dev_backend_override']);
+    if (s.dev_backend_override !== undefined && s.dev_backend_override !== null) {
+      if (typeof s.dev_backend_override === 'string') {
+        const trimmed = s.dev_backend_override.trim().replace(/\/+$/, '');
+        if (trimmed) {
+          return trimmed.endsWith('/api') ? trimmed : `${trimmed}/api`;
+        }
+      }
+    } else {
+      await chrome.storage.local.set({ dev_backend_override: 'http://localhost:8000' });
+      return 'http://localhost:8000/api';
+    }
+  } catch (e) {}
+  return 'http://localhost:8000/api';
 }

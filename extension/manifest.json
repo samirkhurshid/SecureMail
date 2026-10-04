@@ -16,7 +16,8 @@
   "externally_connectable": {
     "matches": [
       "http://localhost:8000/*",
-      "http://127.0.0.1:8000/*"
+      "http://127.0.0.1:8000/*",
+      "https://*.onrender.com/*"
     ]
   },
 
@@ -26,6 +27,8 @@
     "https://outlook.office.com/*",
     "https://outlook.office365.com/*",
     "http://localhost:8000/*",
+    "http://127.0.0.1:8000/*",
+    "https://*.onrender.com/*",
     "https://identitytoolkit.googleapis.com/*",
     "https://securetoken.googleapis.com/*",
     "https://*/*"
@@ -60,7 +63,10 @@
         "https://mail.google.com/*",
         "https://outlook.live.com/*",
         "https://outlook.office.com/*",
-        "https://outlook.office365.com/*"
+        "https://outlook.office365.com/*",
+        "http://localhost:8000/*",
+        "http://127.0.0.1:8000/*",
+        "https://*.onrender.com/*"
       ],
       "js": ["content.js"],
       "css": ["content.css"],

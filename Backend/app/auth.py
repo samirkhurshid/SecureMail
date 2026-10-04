@@ -45,6 +45,17 @@ def _init_firebase():
     service_account_path = os.getenv("FIREBASE_SERVICE_ACCOUNT_PATH", "./firebase-service-account.json")
 
     if not os.path.exists(service_account_path):
+        candidates = [
+            os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "firebase-service-account.json"),
+            os.path.join(os.getcwd(), "Backend", "firebase-service-account.json"),
+            os.path.join(os.getcwd(), "firebase-service-account.json")
+        ]
+        for c in candidates:
+            if os.path.exists(c):
+                service_account_path = c
+                break
+
+    if not os.path.exists(service_account_path):
         logger.warning(
             f"Firebase service account not found at '{service_account_path}'. "
             "Auth-protected endpoints will reject all requests until this is configured. "
@@ -70,26 +81,73 @@ _init_firebase()
 class CurrentUser:
     """Represents the authenticated user extracted from a verified Firebase token."""
 
-    def __init__(self, uid: str, email: Optional[str], email_verified: bool, name: Optional[str]):
+    def __init__(
+        self,
+        uid: str,
+        email: Optional[str] = None,
+        email_verified: bool = False,
+        name: Optional[str] = None,
+        role: Optional[str] = None,
+        permissions: Optional[list] = None,
+    ):
         self.uid = uid
         self.email = email
         self.email_verified = email_verified
         self.name = name
+        
+        # Resolve RBAC role & permissions
+        if role is not None:
+            self.role = role
+        else:
+            from app.services import rbac_service
+            self.role = rbac_service.get_user_role(uid, email)
+            
+        if permissions is not None:
+            self.permissions = list(permissions)
+        else:
+            from app.services import rbac_service
+            self.permissions = list(rbac_service.ROLE_PERMISSIONS.get(self.role, rbac_service.ROLE_PERMISSIONS[rbac_service.ROLE_USER]))
 
     def __repr__(self):
-        return f"<CurrentUser uid={self.uid} email={self.email}>"
+        return f"<CurrentUser uid={self.uid} email={self.email} role={self.role}>"
 
 
-async def get_current_user(authorization: Optional[str] = Header(None)) -> CurrentUser:
+async def get_current_user(
+    authorization: Optional[str] = Header(None),
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
+) -> CurrentUser:
     """
-    FastAPI dependency — verifies the Firebase ID token and returns the user.
-    Use as: async def endpoint(user: CurrentUser = Depends(get_current_user)):
-
-    Raises 401 if:
-      - No Authorization header provided
-      - Token is malformed, expired, or invalid
-      - Firebase Admin SDK is not configured on the server
+    FastAPI dependency — verifies either:
+      1. Programmatic API Key (via X-API-Key: sm_live_... or Authorization: Api-Key sm_live_...)
+      2. Firebase ID token (via Authorization: Bearer <token>)
     """
+    # ── 1. Check for API Key Authentication ──
+    raw_api_key = None
+    if x_api_key and x_api_key.strip():
+        raw_api_key = x_api_key.strip()
+    elif authorization:
+        auth_str = authorization.strip()
+        if auth_str.startswith("Api-Key ") or auth_str.startswith("ApiKey "):
+            raw_api_key = auth_str.split(" ", 1)[1].strip()
+        elif auth_str.startswith("Bearer sm_live_"):
+            raw_api_key = auth_str.split("Bearer ", 1)[1].strip()
+
+    if raw_api_key:
+        from app.services import api_key_service
+        key_data = api_key_service.verify_api_key(raw_api_key)
+        if not key_data:
+            raise HTTPException(status_code=401, detail="Invalid, expired, or revoked API key")
+
+        return CurrentUser(
+            uid=key_data["user_id"],
+            email=key_data["user_email"],
+            email_verified=True,
+            name=key_data["name"],
+            role="api_service",
+            permissions=key_data["scopes"],
+        )
+
+    # ── 2. Check for Firebase JWT Token Authentication ──
     if _firebase_app is None:
         raise HTTPException(
             status_code=503,
@@ -133,15 +191,17 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> Curre
     )
 
 
-async def get_optional_user(authorization: Optional[str] = Header(None)) -> Optional[CurrentUser]:
+async def get_optional_user(
+    authorization: Optional[str] = Header(None),
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
+) -> Optional[CurrentUser]:
     """
     Same as get_current_user but returns None instead of raising when no
-    token is provided. Use for endpoints that work both authenticated and
-    anonymous (rare — most of SecureMail requires full auth per your spec).
+    token is provided. Use for endpoints that work both authenticated and anonymous.
     """
-    if not authorization:
+    if not authorization and not x_api_key:
         return None
     try:
-        return await get_current_user(authorization)
+        return await get_current_user(authorization=authorization, x_api_key=x_api_key)
     except HTTPException:
         return None

@@ -89,3 +89,14 @@ yarn-debug.log*
 yarn-error.log*
 .parcel-cache/
 scratch/
+
+# ── Root Build/Scratch scripts & temp report generation artifacts ──
+/*.py
+/*.pdf
+/*.docx
+/*.png
+/*.zip
+/*.pfa
+/documents_extracted_images/
+/latex_report/
+/paper_assets/

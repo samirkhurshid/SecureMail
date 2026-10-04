@@ -38,6 +38,7 @@ def compute_email_risk_score(
     headers: dict,
     hop_audit: dict | None = None,
     weighted_phishing: dict | None = None,
+    threat_intel_matches: list | None = None,
 ) -> tuple[int, str, list]:
     """
     Compute a 0–100 risk score using confidence-weighted, evidence-stacking logic.
@@ -63,11 +64,30 @@ def compute_email_risk_score(
 
     # Ground-truth ceiling: a confirmed multi-engine malware detection or a
     # heavily-flagged malicious URL is not a heuristic guess — it's a real
-    # antivirus engine consensus. These get a SCORE FLOOR, not just points,
-    # so they can never be diluted down to "medium" risk by a lack of other
-    # signals (a one-line malicious attachment email has no other signals
-    # by design — the attachment IS the whole attack).
+    # antivirus engine consensus.
     ground_truth_floor = 0
+
+    # ── Threat Vault / Threat Intelligence Feed Hits ──
+    threat_vault_floor = 0
+    for hit in (threat_intel_matches or []):
+        t_type = hit.get("threat_type", "threat_intel_match")
+        conf = hit.get("confidence", 80)
+        strong_score += int(conf * 0.80)
+        
+        if t_type in ("malware", "malware_download"):
+            threat_types.add("malware")
+            threat_types.add("threat_intel_malware")
+            threat_vault_floor = max(threat_vault_floor, 85)
+        elif t_type in ("phishing", "phishing_credential_theft"):
+            threat_types.add("phishing")
+            threat_types.add("threat_intel_phishing")
+            threat_vault_floor = max(threat_vault_floor, 85)
+        elif t_type == "c2":
+            threat_types.add("c2_infrastructure")
+            threat_vault_floor = max(threat_vault_floor, 80)
+        else:
+            threat_types.add("threat_intel_match")
+            threat_vault_floor = max(threat_vault_floor, 75)
 
     if max_att_detections >= 15:
         strong_score += 60
@@ -224,10 +244,24 @@ def compute_email_risk_score(
     # Final aggregation
     # ════════════════════════════════════════════════════════════
     score = strong_score + moderate_score + weak_bonus
+    
+    # ════════════════════════════════════════════════════════════
+    # Trust factors & mitigations (Authentic Sender Discount)
+    # ════════════════════════════════════════════════════════════
+    auth_all_pass = headers_present and auth.get("spf") == "pass" and auth.get("dkim") == "pass" and auth.get("dmarc") == "pass"
+    clean_ip = ip_reputation and ip_reputation.get("abuse_confidence_score", 0) == 0 and not ip_reputation.get("is_tor")
+    
+    # If the email passed all 3 cryptographic and DNS authentication standards
+    # without confirmed malware, threat intel hits, or extortion, apply an authentic sender trust dampener.
+    if auth_all_pass and ground_truth_floor == 0 and threat_vault_floor == 0 and not phishing.get("domain_impersonation") and not phishing.get("extortion"):
+        trust_discount = 20
+        if clean_ip:
+            trust_discount += 5
+        score = max(0, score - trust_discount)
+        
     score = max(0, min(100, round(score)))
-    # Apply ground-truth floor: confirmed VT detections can't be diluted
-    # down by an otherwise-quiet email (no other signals fired)
-    score = max(score, ground_truth_floor)
+    # Apply ground-truth & threat-vault floor: confirmed VT and Threat Vault detections can't be diluted
+    score = max(score, ground_truth_floor, threat_vault_floor)
 
     if score == 0 and not threat_types:
         threat_types.add("clean")

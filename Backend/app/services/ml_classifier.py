@@ -1,9 +1,14 @@
 """
-Hybrid Local ML Phishing Classifier Service for SecureMail v4.0.
+Rule-Based Probabilistic Scoring Engine for SecureMail v4.0.
 
-Provides fast (< 5ms), zero-network-dependency, probabilistic phishing inference
+Provides fast (< 5ms), zero-network-dependency, probabilistic phishing scoring
 by vectorizing 30+ engineered lexical, structural, psychological, and authentication
-features with calibrated feature attribution (explainable AI).
+features with linear feature attribution.
+
+A rule-based probabilistic scoring model. Feature weights were manually assigned
+based on domain judgment about phishing indicator severity, not learned from a
+training dataset. This provides a second, independently-computed risk signal
+alongside the primary confidence-weighted risk_scorer.py engine.
 """
 
 import re
@@ -11,6 +16,7 @@ import math
 import time
 from typing import Dict, Any, List, Tuple, Optional
 from app.utils.logger import setup_logger
+from app.services.homograph_service import PUBLIC_INFRASTRUCTURE_ROOTS, is_official_or_whitelisted
 
 logger = setup_logger(__name__)
 
@@ -32,11 +38,11 @@ FEAR_PRESSURE_PATTERNS = [
 ]
 
 BENIGN_INDICATORS = [
-    r"\b(unsubscribe|manage preferences|privacy policy|view in browser|terms of service|copyright \d{4}|all rights reserved|support ticket #\d+)\b"
+    r"\b(unsubscribe|manage preferences|privacy policy|view in browser|terms of service|copyright \d{4}|all rights reserved|support ticket #\d+|confidentiality notice|intended solely for the use of|if you received this (?:email|message) in error|placement portal|recruitment drive|batch \d{4})\b"
 ]
 
-# ── Pre-Trained Calibrated Linear-Sigmoid Feature Weights ─────────────────────
-# Calibrated on enterprise email security benchmarks
+# ── Probabilistic Linear-Sigmoid Feature Weights ─────────────────────────────
+# Manually assigned heuristic weights based on domain judgment of phishing indicator severity
 FEATURE_WEIGHTS: Dict[str, float] = {
     # Psychological & Intent features
     "urgency_score": 1.45,
@@ -56,25 +62,27 @@ FEATURE_WEIGHTS: Dict[str, float] = {
     # Structural & Link features
     "url_count_high": 0.55,
     "external_url_ratio": 0.80,
+    "cloud_cdn_assets_ratio": -0.65,
     "ip_in_url": 1.60,
     "url_shortener_present": 1.10,
     "lookalike_domain_present": 1.95,
     "subdomain_trap_present": 1.50,
     "quishing_qr_present": 1.40,
     "dangerous_attachment_present": 1.85,
+    "threat_intel_match_present": 2.50,
     
     # Authentication & Header features
     "spf_fail": 1.30,
     "dkim_fail": 1.15,
     "dmarc_fail": 1.45,
-    "auth_all_pass": -1.50,
+    "auth_all_pass": -1.85,
     "display_name_spoof": 1.40,
     "reply_to_mismatch": 1.25,
     "relay_hop_anomaly": 0.75,
     "high_ip_abuse": 1.20,
 }
 
-MODEL_BIAS: float = -1.65  # Calibrated baseline prior for realistic threat distribution
+MODEL_BIAS: float = -1.65  # Baseline prior offset for realistic threat distribution (calibrated heuristic baseline)
 
 
 # ── Feature Vectorizer ───────────────────────────────────────────────────────
@@ -132,7 +140,8 @@ def extract_feature_vector(parsed_email: Dict[str, Any], extra_heuristics: Optio
     features["short_body_with_link"] = 1.0 if (is_short_body and len(urls) > 0) else 0.0
     
     # ── 3. Structural & Link Attack Vectors ──
-    features["url_count_high"] = min(1.0, len(urls) / 10.0)
+    # Normal emails contain 1-5 links (headers, buttons, unsubscribe). Only flag if elevated (> 5).
+    features["url_count_high"] = max(0.0, min(1.0, (len(urls) - 5) / 8.0))
     
     # IP in URL
     has_ip_url = any(re.search(r"https?://\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}", u.get("url", "")) for u in urls)
@@ -157,13 +166,36 @@ def extract_feature_vector(parsed_email: Dict[str, Any], extra_heuristics: Optio
     has_dang_ext = any(a.get("is_dangerous_ext", False) for a in attachments)
     features["dangerous_attachment_present"] = 1.0 if has_dang_ext else 0.0
     
-    # External URL ratio compared to sender domain
+    # Confirmed Threat Intelligence Feed Matches (URLhaus / OpenPhish / Vault)
+    threat_matches = parsed_email.get("threat_intel_matches", []) or extra.get("threat_intel_matches", [])
+    features["threat_intel_match_present"] = 1.0 if (threat_matches and len(threat_matches) > 0) else 0.0
+    
+    # External URL ratio compared to sender domain & Trusted Cloud/CDN Assets
+    from app.services.email_parser import _is_same_org_domain
     from_dom = headers.get("from_domain", "").lower()
     if urls and from_dom:
-        ext_count = sum(1 for u in urls if from_dom not in u.get("domain", "").lower())
-        features["external_url_ratio"] = ext_count / len(urls)
+        untrusted_ext_count = 0
+        cloud_asset_count = 0
+        for u in urls:
+            dom = u.get("domain", "").lower()
+            is_cloud, _, _ = is_official_or_whitelisted(dom)
+            if is_cloud or any(dom == pub or dom.endswith("." + pub) for pub in PUBLIC_INFRASTRUCTURE_ROOTS):
+                cloud_asset_count += 1
+            elif not _is_same_org_domain(dom, from_dom):
+                untrusted_ext_count += 1
+        features["external_url_ratio"] = untrusted_ext_count / len(urls)
+        features["cloud_cdn_assets_ratio"] = cloud_asset_count / len(urls)
+    elif urls:
+        cloud_asset_count = sum(
+            1 for u in urls
+            if is_official_or_whitelisted(u.get("domain", "").lower())[0]
+            or any(u.get("domain", "").lower() == pub or u.get("domain", "").lower().endswith("." + pub) for pub in PUBLIC_INFRASTRUCTURE_ROOTS)
+        )
+        features["external_url_ratio"] = 0.0
+        features["cloud_cdn_assets_ratio"] = cloud_asset_count / len(urls)
     else:
         features["external_url_ratio"] = 0.0
+        features["cloud_cdn_assets_ratio"] = 0.0
         
     # ── 4. Authentication & Header Signals ──
     spf = str(auth.get("spf", "")).lower()
@@ -181,7 +213,9 @@ def extract_feature_vector(parsed_email: Dict[str, Any], extra_heuristics: Optio
     features["reply_to_mismatch"] = 1.0 if headers.get("reply_to_mismatch", False) else 0.0
     
     anomalies = hop_audit.get("anomalies", []) if isinstance(hop_audit, dict) else []
-    features["relay_hop_anomaly"] = min(1.0, len(anomalies) * 0.40)
+    # Exclude benign informational notes so only actual relay anomalies contribute
+    real_anomalies = [a for a in anomalies if "No Received headers" not in a and "direct submission" not in a and "direct client submission" not in a]
+    features["relay_hop_anomaly"] = min(1.0, len(real_anomalies) * 0.40)
     
     ip_rep = headers.get("ip_reputation", {}) or {}
     abuse_score = ip_rep.get("abuse_confidence_score", 0) if isinstance(ip_rep, dict) else 0
@@ -203,9 +237,9 @@ def sigmoid(z: float) -> float:
 
 def predict_phishing_probability(parsed_email: Dict[str, Any], extra_heuristics: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """
-    Executes local high-speed ML inference (< 5ms).
-    Computes calibrated phishing probability, categorical confidence,
-    and top contributing feature signals (SHAP-style attribution).
+    Executes local high-speed probabilistic heuristic scoring (< 5ms).
+    Computes heuristic phishing probability, categorical confidence,
+    and top contributing feature signals (linear feature attribution).
     """
     start_time = time.perf_counter()
     
@@ -262,7 +296,7 @@ def predict_phishing_probability(parsed_email: Dict[str, Any], extra_heuristics:
         "probability": round(probability, 4),
         "percentage": round(probability * 100, 1),
         "confidence": confidence,
-        "model_version": "v4.0-hybrid-ensemble",
+        "model_version": "v4.0-heuristic-ensemble",
         "inference_duration_ms": duration_ms,
         "feature_count": len(features),
         "top_signals": top_signals,
@@ -286,12 +320,14 @@ def _format_feature_label(feat_name: str, val: float) -> str:
         "short_body_with_link": "Concise Call-to-Action Link Lure",
         "url_count_high": "Elevated Link Density",
         "external_url_ratio": "Cross-Domain Destination Mismatch",
+        "cloud_cdn_assets_ratio": "Verified Cloud & CDN Static Assets",
         "ip_in_url": "Raw IP Address URL Destination",
         "url_shortener_present": "Obfuscated URL Shortener Link",
         "lookalike_domain_present": "Lookalike / IDN Homograph Target",
         "subdomain_trap_present": "Subdomain Deception Trap",
         "quishing_qr_present": "Embedded Optical QR Code Payload",
         "dangerous_attachment_present": "Executable / Dangerous File Attachment",
+        "threat_intel_match_present": "Active Threat Feed Match (URLhaus/OpenPhish/Vault)",
         "spf_fail": "SPF Sender Authorization Failure",
         "dkim_fail": "DKIM Cryptographic Signature Failure",
         "dmarc_fail": "DMARC Policy Rejection",

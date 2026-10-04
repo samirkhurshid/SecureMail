@@ -4,21 +4,37 @@ Scans emails, attachments, URLs and headers for threats.
 Integrates with VirusTotal and AbuseIPDB APIs.
 """
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 import time
 import os
 
-from fastapi import Depends
-from app.routers import scan, forensics, headers, attachments, settings as settings_router, ai as ai_router, account as account_router
+from app.routers import (
+    scan, forensics, headers, attachments,
+    settings as settings_router, ai as ai_router,
+    account as account_router, threat_intel as threat_intel_router,
+    api_keys as api_keys_router, audit as audit_router,
+    auth_proxy as auth_proxy_router, organization as organization_router,
+)
+from app.services import threat_intel_service, rbac_service, api_key_service, audit_service, organization_service
 from app.utils.logger import setup_logger
 from app.config import get_settings
 from app.auth import get_current_user
 
 logger = setup_logger(__name__)
 settings = get_settings()
+
+# Initialize Threat Vault, RBAC, API Keys, Audit Trail & Organization databases
+try:
+    threat_intel_service.init_threat_vault_db()
+    rbac_service.init_user_roles_db()
+    api_key_service.init_api_keys_db()
+    audit_service.init_audit_db()
+    organization_service.init_org_db()
+except Exception as _e:
+    logger.warning(f"Database initialization warning: {_e}")
 
 # Resolve the Frontend directory (Backend/app/main.py -> Backend/ -> project root -> Frontend/)
 _BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -94,9 +110,12 @@ async def global_exception_handler(request: Request, exc: Exception):
     return JSONResponse(status_code=500, content={"error": "Internal server error", "detail": detail})
 
 
-# Scan and AI routers allow optional auth for anonymous trial scans
+# Public / Optional Auth routers
+app.include_router(auth_proxy_router.router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(scan.router, prefix="/api/scan", tags=["Email Scanning"])
 app.include_router(ai_router.router, prefix="/api/ai", tags=["AI Analysis"])
+app.include_router(threat_intel_router.router, prefix="/api/threat-intel", tags=["Threat Intelligence"])
+app.include_router(account_router.router, prefix="/api/account", tags=["Account"])
 
 # Protected routers — requests must carry a valid Firebase ID token
 _auth_dep = [Depends(get_current_user)]
@@ -105,25 +124,14 @@ app.include_router(forensics.router, prefix="/api/forensics", tags=["Forensics"]
 app.include_router(headers.router, prefix="/api/headers", tags=["Header Analysis"], dependencies=_auth_dep)
 app.include_router(attachments.router, prefix="/api/attachments", tags=["Attachments"], dependencies=_auth_dep)
 app.include_router(settings_router.router, prefix="/api/settings", tags=["Settings"], dependencies=_auth_dep)
-app.include_router(account_router.router, prefix="/api/account", tags=["Account"], dependencies=_auth_dep)
+app.include_router(api_keys_router.router, prefix="/api/api-keys", tags=["API Keys"], dependencies=_auth_dep)
+app.include_router(audit_router.router, prefix="/api/audit-trail", tags=["Compliance Audit Trail"], dependencies=_auth_dep)
+app.include_router(organization_router.router, prefix="/api/org", tags=["Organization Sandbox"], dependencies=_auth_dep)
 
 
 @app.get("/health", tags=["Health"])
 async def health():
     return {"status": "healthy", "timestamp": time.time()}
-
-
-@app.get("/api/auth/config", tags=["Authentication"])
-async def get_auth_config():
-    """Provides public Firebase web client configuration dynamically."""
-    return {
-        "apiKey": settings.FIREBASE_WEB_API_KEY or os.environ.get("FIREBASE_WEB_API_KEY", ""),
-        "authDomain": settings.FIREBASE_AUTH_DOMAIN,
-        "projectId": settings.FIREBASE_PROJECT_ID,
-        "storageBucket": settings.FIREBASE_STORAGE_BUCKET,
-        "messagingSenderId": settings.FIREBASE_MESSAGING_SENDER_ID,
-        "appId": settings.FIREBASE_APP_ID,
-    }
 
 
 # ── Serve the Frontend dashboard ──────────────────────────────────────────────

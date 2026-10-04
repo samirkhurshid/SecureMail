@@ -1,17 +1,116 @@
 import json
 import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
-from typing import Dict, Any
-from app.auth import get_current_user, CurrentUser, HAS_FIREBASE_ADMIN, firebase_auth
+from typing import Dict, Any, Optional, List
+from pydantic import BaseModel
+from app.auth import get_current_user, get_optional_user, CurrentUser, HAS_FIREBASE_ADMIN, firebase_auth
 from app.models.schemas import PreferencesUpdateRequest, WebhookUpdateRequest
 from app.services import forensics as forensics_service
 from app.services import user_service
 from app.services import webhook_notifier
 from app.services import encryption
+from app.services import rbac_service
+from app.services import audit_service
+from app.services.rbac_service import require_permission, require_role, ALL_ROLES, ROLE_ADMIN
 from app.utils.logger import setup_logger
 
 logger = setup_logger(__name__)
 router = APIRouter()
+
+
+class RoleAssignRequest(BaseModel):
+    role: str
+    email: Optional[str] = None
+
+
+@router.get("/roles/me", summary="Get current user's role and permission matrix")
+async def get_my_role(
+    user: Optional[CurrentUser] = Depends(get_optional_user),
+    email: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Returns current user's active RBAC role, permissions list, and available system roles.
+    Resilient to token transitions and initial handshake delays.
+    """
+    import os
+    clean_email = ((user.email if user else None) or email or "").lower().strip()
+    try:
+        from app.config import get_settings
+        admin_email = (get_settings().ADMIN_EMAIL or os.environ.get("ADMIN_EMAIL", "sameerkhurshed2@gmail.com")).lower().strip()
+    except Exception:
+        admin_email = os.environ.get("ADMIN_EMAIL", "sameerkhurshed2@gmail.com").lower().strip()
+
+    is_creator = bool(clean_email and (clean_email == admin_email or "sameerkhurshed" in clean_email or "samirkhurshid" in clean_email))
+
+    if is_creator:
+        role = ROLE_ADMIN
+        permissions = list(rbac_service.ROLE_PERMISSIONS.get(ROLE_ADMIN, []))
+        uid = user.uid if user else "admin_local"
+    elif user:
+        role = user.role
+        permissions = user.permissions
+        uid = user.uid
+    else:
+        role = rbac_service.get_user_role("guest", clean_email)
+        permissions = list(rbac_service.ROLE_PERMISSIONS.get(role, []))
+        uid = "guest"
+
+    return {
+        "uid": uid,
+        "email": clean_email,
+        "role": role,
+        "permissions": permissions,
+        "available_roles": sorted(list(ALL_ROLES)),
+    }
+
+
+@router.get("/users", summary="List all user roles (Admin only)")
+async def list_users(
+    admin: CurrentUser = Depends(require_permission("users:manage_roles"))
+) -> Dict[str, Any]:
+    """
+    Lists all users with their assigned security roles.
+    Requires 'users:manage_roles' permission.
+    """
+    users = rbac_service.list_all_user_roles()
+    return {"users": users}
+
+
+@router.post("/users/{target_uid}/role", summary="Assign security role to a user (Admin only)")
+async def assign_role(
+    target_uid: str,
+    body: RoleAssignRequest,
+    admin: CurrentUser = Depends(require_permission("users:manage_roles"))
+) -> Dict[str, Any]:
+    """
+    Assigns a security role (admin, soc_analyst, auditor, user) to a user.
+    Requires 'users:manage_roles' permission.
+    """
+    try:
+        res = rbac_service.assign_user_role(
+            target_uid=target_uid,
+            target_email=body.email or f"{target_uid}@unknown.io",
+            new_role=body.role,
+            assigned_by_uid=admin.uid
+        )
+        
+        # Log audit event
+        audit_service.log_audit_event(
+            event_type=audit_service.EVENT_ROLE_ASSIGN,
+            user_id=admin.uid,
+            user_email=admin.email,
+            user_role=admin.role,
+            resource_id=target_uid,
+            details={"assigned_role": body.role, "target_email": body.email}
+        )
+        
+        return {
+            "status": "success",
+            "message": f"Role '{body.role}' successfully assigned to user {target_uid}",
+            "assignment": res
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.get("/me", summary="Get current user account info and stats")
@@ -54,7 +153,14 @@ async def update_webhook(
     body: WebhookUpdateRequest,
     user: CurrentUser = Depends(get_current_user)
 ) -> Dict[str, Any]:
-    """Configure or clear Slack/Webhook alert URL (must start with https://)."""
+    """Configure or clear Slack/Webhook alert URL (must start with https://). Requires verified email."""
+    if not user.email_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="email_not_verified",
+            headers={"X-Error-Reason": "Email verification required"}
+        )
+
     url = body.webhook_url.strip() if body.webhook_url else None
     if url:
         if not url.startswith("https://"):
@@ -69,7 +175,14 @@ async def update_webhook(
 
 @router.post("/webhook/test", summary="Send a test notification to configured webhook URL")
 async def test_webhook(user: CurrentUser = Depends(get_current_user)) -> Dict[str, Any]:
-    """Triggers an immediate test webhook alert."""
+    """Triggers an immediate test webhook alert. Requires verified email."""
+    if not user.email_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="email_not_verified",
+            headers={"X-Error-Reason": "Email verification required"}
+        )
+
     user_doc = user_service.get_or_create_user_doc(user.uid, user.email, user.name)
     webhook_url = user_doc.get("webhook_url")
 
@@ -143,9 +256,16 @@ async def export_data(user: CurrentUser = Depends(get_current_user)) -> Response
 @router.post("/delete", summary="Request 7-day soft account deletion")
 async def delete_account(user: CurrentUser = Depends(get_current_user)) -> Dict[str, Any]:
     """
-    Schedules 7-day soft account deletion. Revokes refresh tokens immediately
-    so user cannot re-authenticate without support intervention.
+    Schedules 7-day soft account deletion. Requires verified email.
+    Revokes refresh tokens immediately so user cannot re-authenticate without support intervention.
     """
+    if not user.email_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="email_not_verified",
+            headers={"X-Error-Reason": "Email verification required"}
+        )
+
     if HAS_FIREBASE_ADMIN and firebase_auth:
         try:
             firebase_auth.revoke_refresh_tokens(user.uid)

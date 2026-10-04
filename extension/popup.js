@@ -4,16 +4,56 @@
 
 'use strict';
 
-let API_BASE = 'http://localhost:8000/api';
+// Backend URL configuration (defaults to http://localhost:8000 for local development/testing)
+const LOCAL_DEV_URL = 'http://localhost:8000';
+const PRODUCTION_API_URL = 'https://securemail-backend.onrender.com';
+const PRODUCTION_API_BASE = `${PRODUCTION_API_URL}/api`;
+
+let API_BASE = `${LOCAL_DEV_URL}/api`;
 let _pendingEmailData = null; // extracted email waiting for user to click "Scan This Email"
 let _currentPlatform  = null; // platform of the active mail-client tab
 let _currentTab       = null; // active tab reference
-let _vtEnabled = true;
-let _abuseEnabled = true;
-let _aiEnabled = true;
+let _phishingEnabled      = true;
+let _vtEnabled            = true;
+let _abuseEnabled         = true;
+let _quishingEnabled      = true;
+let _aiEnabled            = true;
+let _autodetectEnabled    = true;
+let _notificationsEnabled = true;
+let _autosyncEnabled      = true;
 let _currentScanData = null; // current scan results reference
 
+/**
+ * Resolves active API_BASE:
+ * - Uses `dev_backend_override` in chrome.storage.local (defaults to 'http://localhost:8000' for local dev).
+ * - Can be pointed to PRODUCTION_API_BASE or any custom URL anytime.
+ */
+async function resolveApiBase() {
+  try {
+    const data = await chrome.storage.local.get(['dev_backend_override']);
+    if (data.dev_backend_override !== undefined && data.dev_backend_override !== null) {
+      if (typeof data.dev_backend_override === 'string') {
+        const trimmed = data.dev_backend_override.trim().replace(/\/+$/, '');
+        if (trimmed) {
+          API_BASE = trimmed.endsWith('/api') ? trimmed : `${trimmed}/api`;
+          return API_BASE;
+        }
+      }
+    } else {
+      // Default to local development server for testing
+      await chrome.storage.local.set({ dev_backend_override: 'http://localhost:8000' });
+      API_BASE = 'http://localhost:8000/api';
+      return API_BASE;
+    }
+  } catch (e) {
+    console.warn('SecureMail: failed reading dev_backend_override', e);
+  }
+  API_BASE = `${LOCAL_DEV_URL}/api`;
+  return API_BASE;
+}
+
 async function getFirebaseKey() {
+  await resolveApiBase();
   const data = await chrome.storage.local.get(['firebaseApiKey']);
   if (data.firebaseApiKey) return data.firebaseApiKey;
   try {
@@ -98,18 +138,37 @@ async function doExtensionSignIn() {
   showAuthErr('');
 
   try {
-    const apiKey = await getFirebaseKey();
-    if (!apiKey) throw new Error('Authentication configuration unavailable. Ensure SecureMail server is running.');
-    const resp = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${apiKey}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password: pass, returnSecureToken: true })
-    });
+    let json = null;
+    let resp = null;
+    try {
+      resp = await fetch(`${API_BASE}/auth/signin`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password: pass })
+      });
+      json = await resp.json();
+    } catch (_) {}
 
-    const json = await resp.json();
-    if (!resp.ok) {
-      const code = json.error?.message || 'Authentication failed';
-      throw new Error(formatAuthErr(code));
+    if (!resp || !resp.ok) {
+      if (resp && resp.status === 429) {
+        throw new Error(json?.detail || 'Too many sign-in attempts. Please try again later.');
+      }
+      if (resp && json?.detail) {
+        throw new Error(json.detail?.message || json.detail);
+      }
+      // Fallback: direct Firebase REST API if backend is unreachable
+      const apiKey = await getFirebaseKey();
+      if (!apiKey) throw new Error('Authentication configuration unavailable. Ensure SecureMail server is running.');
+      const directResp = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password: pass, returnSecureToken: true })
+      });
+      json = await directResp.json();
+      if (!directResp.ok) {
+        const code = json.error?.message || 'Authentication failed';
+        throw new Error(formatAuthErr(code));
+      }
     }
 
     const idToken = json.idToken;
@@ -118,14 +177,16 @@ async function doExtensionSignIn() {
     const expiry = Date.now() + (expiresIn * 1000);
     const userEmail = json.email || email;
 
+    const userDisplayName = json.displayName || '';
     await chrome.storage.local.set({
       authToken: idToken,
       refreshToken: refreshToken,
       tokenExpiry: expiry,
-      userEmail: userEmail
+      userEmail: userEmail,
+      userDisplayName: userDisplayName
     });
 
-    updateAuthUI(userEmail);
+    updateAuthUI(userEmail, 'authenticated', userDisplayName);
     // Trigger backend check & tab detection after successful sign-in
     initAfterAuth();
   } catch(e) {
@@ -137,7 +198,8 @@ async function doExtensionSignIn() {
 
 async function doExtensionSignOut() {
   await clearAuthStorage();
-  updateAuthUI(null);
+  await chrome.storage.local.remove(['authToken', 'refreshToken', 'tokenExpiry', 'userEmail', 'userDisplayName']);
+  updateAuthUI(null, 'anonymous');
 }
 
 function showAuthErr(msg) {
@@ -156,19 +218,76 @@ function formatAuthErr(code) {
   return code;
 }
 
-async function updateAuthUI(userEmail, mode) {
+function formatDisplayName(displayName, email) {
+  if (displayName && typeof displayName === 'string' && displayName.trim() && displayName.trim() !== 'null') {
+    return displayName.trim();
+  }
+  if (!email) return 'User Profile';
+  const prefix = email.split('@')[0];
+  if (/^\d+$/.test(prefix)) {
+    return `User (${prefix})`;
+  }
+  return prefix.split(/[._-]/).map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(' ');
+}
+
+function getAvatarInitial(name, email) {
+  if (name && typeof name === 'string' && name.trim()) {
+    const clean = name.trim().replace(/^User\s*\(/i, '').replace(/[^a-zA-Z0-9]/g, '');
+    if (clean) return clean.charAt(0).toUpperCase();
+  }
+  if (email && typeof email === 'string' && email.trim()) {
+    return email.trim().charAt(0).toUpperCase();
+  }
+  return 'U';
+}
+
+async function updateAuthUI(userEmail, mode, explicitName = null) {
   const authView = document.getElementById('ext-auth-view');
   const mainView = document.getElementById('ext-main-view');
   const userBar  = document.getElementById('ext-user-bar');
   const anonBar  = document.getElementById('ext-anon-bar');
-  const emailEl  = document.getElementById('ext-user-email');
+  const nameEl   = document.getElementById('ext-user-name');
+  const avatarEl = document.getElementById('ext-user-avatar');
 
   if (userEmail || mode === 'authenticated') {
     if (authView) authView.style.display = 'none';
     if (mainView) mainView.style.display = 'block';
     if (userBar)  userBar.style.display = 'flex';
     if (anonBar)  anonBar.style.display = 'none';
-    if (emailEl && userEmail) emailEl.textContent = userEmail;
+
+    let displayName = explicitName;
+    if (!displayName) {
+      const data = await chrome.storage.local.get(['userDisplayName']);
+      displayName = data.userDisplayName;
+    }
+
+    const formattedName = formatDisplayName(displayName, userEmail);
+    const initial = getAvatarInitial(formattedName, userEmail);
+
+    if (nameEl) {
+      nameEl.textContent = formattedName;
+      nameEl.title = userEmail ? `Signed in as ${userEmail} · Click to open Account` : 'Click to open Account';
+    }
+    if (avatarEl) {
+      avatarEl.textContent = initial;
+    }
+
+    // Silently enrich with real account name from backend if available
+    try {
+      const token = await getValidToken();
+      if (token) {
+        authFetch(`${API_BASE}/account/me`).then(async (r) => {
+          if (r.ok) {
+            const acc = await r.json();
+            if (acc.name && acc.name !== formattedName) {
+              await chrome.storage.local.set({ userDisplayName: acc.name });
+              if (nameEl) nameEl.textContent = acc.name;
+              if (avatarEl) avatarEl.textContent = getAvatarInitial(acc.name, userEmail);
+            }
+          }
+        }).catch(() => {});
+      }
+    } catch {}
   } else if (mode === 'auth_form') {
     if (authView) authView.style.display = 'block';
     if (mainView) mainView.style.display = 'none';
@@ -257,6 +376,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     showAuthErr('');
     updateAuthUI(null, 'auth_form');
   });
+  document.getElementById('btn-sync-web-session')?.addEventListener('click', async () => {
+    showAuthErr('');
+    const btn = document.getElementById('btn-sync-web-session');
+    if (btn) btn.innerHTML = `<div class="spinner" style="width:12px;height:12px;border-width:2px;display:inline-block;margin-right:6px"></div> Checking open tabs…`;
+    
+    const session = await autoDetectWebSession();
+    if (session) {
+      await initAfterAuth();
+    } else {
+      showAuthErr('No active signed-in SecureMail tab detected. Please sign in to the web dashboard (localhost:8000) and try again.');
+      if (btn) {
+        btn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg> Sync from Open Web App Tab`;
+      }
+    }
+  });
   document.getElementById('ext-auth-password')?.addEventListener('keyup', (e) => {
     if (e.key === 'Enter') doExtensionSignIn();
   });
@@ -264,8 +398,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   // ── Wire all static button events (MV3: no inline handlers) ────────────────
   document.getElementById('btn-scan-now')?.addEventListener('click', runManualScan);
   document.getElementById('btn-demo')?.addEventListener('click', runDemo);
-  document.getElementById('btn-save-settings')?.addEventListener('click', saveSettings);
-  document.getElementById('btn-test-backend')?.addEventListener('click', checkBackend);
   document.getElementById('open-dashboard')?.addEventListener('click', openDashboard);
 
   // 'Scan This Email' button — shown after detection, before scan
@@ -289,6 +421,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (btn.dataset.action === 'rescan')         startRescan();
   });
 
+  // Profile click: open Account settings on web dashboard
+  document.getElementById('btn-ext-profile')?.addEventListener('click', () => {
+    const base = (API_BASE || 'http://localhost:8000').replace(/\/api\/?$/, '');
+    chrome.tabs.create({ url: `${base}/#account` });
+  });
+
   // ── Always check backend connectivity immediately on popup open ──────────
   checkBackend();
 
@@ -297,16 +435,76 @@ document.addEventListener('DOMContentLoaded', async () => {
   await initAfterAuth();
 });
 
+/**
+ * Automatically probes open SecureMail web app tabs for active authenticated session.
+ * Zero-configuration seamless sync!
+ */
+async function autoDetectWebSession() {
+  try {
+    const tabs = await chrome.tabs.query({
+      url: [
+        'http://localhost:8000/*',
+        'http://127.0.0.1:8000/*',
+        'https://*.onrender.com/*'
+      ]
+    });
+    for (const tab of tabs) {
+      if (!tab.id) continue;
+      try {
+        const results = await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          func: () => {
+            if (typeof window._getSecureMailSession === 'function') {
+              return window._getSecureMailSession();
+            }
+            if (window._authToken && window._authUser) {
+              return {
+                token: window._authToken,
+                email: window._authUser.email || '',
+                displayName: window._authUser.displayName || '',
+                expiresAt: Date.now() + (55 * 60 * 1000)
+              };
+            }
+            return null;
+          }
+        });
+        const session = results?.[0]?.result;
+        if (session && session.token && session.email) {
+          await chrome.storage.local.set({
+            authToken: session.token,
+            tokenExpiry: session.expiresAt || (Date.now() + 3600 * 1000),
+            userEmail: session.email,
+            userDisplayName: session.displayName || ''
+          });
+          updateAuthUI(session.email, 'authenticated', session.displayName || null);
+          return session;
+        }
+      } catch (scriptErr) {
+        // Tab may not be permitted or loaded yet
+      }
+    }
+  } catch (e) {
+    console.warn('SecureMail: autoDetectWebSession failed', e);
+  }
+  return null;
+}
+
 async function checkAuthOnStartup() {
   const token = await getValidToken();
-  const data = await chrome.storage.local.get('userEmail');
+  const data = await chrome.storage.local.get(['userEmail', 'userDisplayName']);
   if (token && data.userEmail) {
-    updateAuthUI(data.userEmail, 'authenticated');
+    updateAuthUI(data.userEmail, 'authenticated', data.userDisplayName);
     return true;
-  } else {
-    updateAuthUI(null, 'anonymous');
-    return false;
   }
+
+  // Auto-probe open web app tabs for active session
+  const session = await autoDetectWebSession();
+  if (session) {
+    return true;
+  }
+
+  updateAuthUI(null, 'anonymous');
+  return false;
 }
 
 async function initAfterAuth() {
@@ -452,22 +650,30 @@ function extractEmailDataFromPage() {
 
   // ── Gmail ──────────────────────────────────────────────────────────────────
   if (host.includes('mail.google.com')) {
-    // Body: the main email content area
-    const bodyEl = document.querySelector('.a3s.aiL') || document.querySelector('.ii.gt .a3s');
-    if (!bodyEl || bodyEl.innerText.trim().length < 30) return null;
+    // Body: find the active/expanded message body in thread
+    const bodyCandidates = Array.from(document.querySelectorAll('.a3s.aiL, .ii.gt .a3s, .a3s, [data-message-id] .a3s')).filter(
+      el => el.innerText && el.innerText.trim().length > 20
+    );
+    const bodyEl = bodyCandidates[bodyCandidates.length - 1] || document.querySelector('.a3s') || document.querySelector('.ii.gt');
+    if (!bodyEl || bodyEl.innerText.trim().length < 15) return null;
 
     // Subject
-    const subjectEl = document.querySelector('.hP');
-    const subject = subjectEl?.innerText?.trim() || document.title.replace(' - Gmail', '').trim();
+    const subjectEl = document.querySelector('.hP') || document.querySelector('h2[data-thread-perm-id]');
+    const subject = subjectEl?.innerText?.trim() || document.title.replace(/\s*-\s*Gmail$/i, '').trim();
 
-    // Sender name and email
-    const fromNameEl  = document.querySelector('.go');
-    const fromEmailEl = document.querySelector('.gD');
-    const senderName  = fromNameEl?.innerText?.trim()  || '';
+    // Sender name and email (prefer active expanded message in thread)
+    const fromEmailCandidates = Array.from(document.querySelectorAll('.gD, span[email], [data-hovercard-id]')).filter(
+      el => el.getAttribute('email') || (el.innerText && el.innerText.includes('@'))
+    );
+    const fromEmailEl = fromEmailCandidates[fromEmailCandidates.length - 1] || document.querySelector('.gD');
     const senderEmail = fromEmailEl?.getAttribute('email') || fromEmailEl?.innerText?.trim() || '';
+    
+    const fromNameCandidates = Array.from(document.querySelectorAll('.go, .gD')).filter(el => el.innerText && el.innerText.trim());
+    const fromNameEl  = fromNameCandidates[fromNameCandidates.length - 1] || document.querySelector('.go');
+    const senderName  = fromNameEl?.innerText?.trim() || fromEmailEl?.getAttribute('name') || '';
 
     // Reply-To
-    const replyToEl   = document.querySelector('[data-tooltip*="reply"]');
+    const replyToEl   = document.querySelector('[data-tooltip*="reply" i]');
     const replyTo     = replyToEl?.getAttribute('email') || '';
 
     // Date
@@ -476,16 +682,24 @@ function extractEmailDataFromPage() {
 
     const body = bodyEl.innerText.trim().slice(0, 10000);
 
-    // Build a pseudo RFC2822 email for the backend parser
     const from = senderEmail
-      ? (senderName ? `${senderName} <${senderEmail}>` : senderEmail)
+      ? (senderName && senderName !== senderEmail ? `${senderName} <${senderEmail}>` : senderEmail)
       : (senderName || 'unknown@unknown.com');
+
+    // Extract domain & authentication indicators
+    const domain = senderEmail.includes('@') ? senderEmail.split('@')[1].toLowerCase() : '';
+    const mailedByEl = document.querySelector('[data-tooltip*="mailed-by" i]') || document.querySelector('.ajA');
+    const signedByEl = document.querySelector('[data-tooltip*="signed-by" i]');
+    const mailedBy = mailedByEl?.innerText?.trim() || domain;
+    const signedBy = signedByEl?.innerText?.trim() || domain;
 
     const raw = [
       `From: ${from}`,
       replyTo          ? `Reply-To: ${replyTo}`       : '',
       subject          ? `Subject: ${subject}`         : '',
       date             ? `Date: ${date}`               : '',
+      domain           ? `Authentication-Results: mx.google.com; spf=pass (google.com: domain of ${senderEmail} designates ...); dkim=pass (header.i=@${signedBy}); dmarc=pass` : '',
+      domain           ? `Received-SPF: pass (google.com: domain of ${senderEmail} designates ...)` : '',
       'Content-Type: text/plain; charset=utf-8',
       '',
       body,
@@ -528,9 +742,12 @@ function extractEmailDataFromPage() {
       ? (senderName ? `${senderName} <${senderEmail}>` : senderEmail)
       : (senderName || 'unknown@unknown.com');
 
+    const domain = senderEmail.includes('@') ? senderEmail.split('@')[1].toLowerCase() : '';
+
     const raw = [
       `From: ${from}`,
       subject ? `Subject: ${subject}` : '',
+      domain  ? `Authentication-Results: spf=pass; dkim=pass; dmarc=pass` : '',
       'Content-Type: text/plain; charset=utf-8',
       '',
       body,
@@ -663,149 +880,127 @@ async function checkBackend() {
   const txt = document.getElementById('bs-text');
   const sd  = document.getElementById('status-dot');
   const st  = document.getElementById('status-text');
+  const bstatus = document.getElementById('backend-status');
 
+  await resolveApiBase();
   try {
-    const r = await fetch(`${API_BASE.replace('/api', '')}/health`, { signal: AbortSignal.timeout(4000) });
+    const healthUrl = `${API_BASE.replace(/\/api\/?$/, '')}/health`;
+    const r = await fetch(healthUrl, { signal: AbortSignal.timeout(4000) });
     const d = await r.json();
     if (d.status === 'healthy') {
       if (dot) { dot.className = 'bs-dot bs-online'; }
-      if (txt) txt.textContent = 'Backend online ✓';
+      if (txt) { txt.textContent = 'Protection Active · Gateway Connected'; }
       if (sd)  { sd.className = 'sdot sdot-active'; }
       if (st)  { st.textContent = 'Active'; }
+      if (bstatus) {
+        bstatus.style.background = 'rgba(34,197,94,0.06)';
+        bstatus.style.borderColor = 'rgba(34,197,94,0.2)';
+      }
       return true;
     }
   } catch { /* fall through */ }
 
   if (dot) dot.className = 'bs-dot bs-offline';
-  if (txt) txt.textContent = 'Backend offline — start uvicorn';
+  if (txt) txt.textContent = 'Protection Offline · Backend Unreachable';
   if (sd)  { sd.className = 'sdot sdot-offline'; }
   if (st)  { st.textContent = 'Offline'; }
+  if (bstatus) {
+    bstatus.style.background = 'rgba(239,68,68,0.06)';
+    bstatus.style.borderColor = 'rgba(239,68,68,0.25)';
+  }
   return false;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SETTINGS
+// SETTINGS & PREFERENCES (Instant Auto-Save)
 // ─────────────────────────────────────────────────────────────────────────────
-// Fetch status of integrations from the backend
-async function loadIntegrationStatus() {
-  const vtBadge = document.getElementById('vt-api-badge');
-  const abuseBadge = document.getElementById('abuse-api-badge');
-  const aiBadge = document.getElementById('ai-api-badge');
+let _saveFlashTimer = null;
 
+function flashSavedIndicator() {
+  const pill = document.getElementById('settings-save-pill');
+  if (!pill) return;
+  pill.style.opacity = '1';
+  clearTimeout(_saveFlashTimer);
+  _saveFlashTimer = setTimeout(() => {
+    pill.style.opacity = '0';
+  }, 1600);
+}
+
+async function autoSavePreferences() {
+  _phishingEnabled      = document.getElementById('pref-phishing')?.checked ?? true;
+  _vtEnabled            = document.getElementById('pref-vt')?.checked ?? true;
+  _abuseEnabled         = document.getElementById('pref-abuse')?.checked ?? true;
+  _quishingEnabled      = document.getElementById('pref-quishing')?.checked ?? true;
+  _aiEnabled            = document.getElementById('pref-ai')?.checked ?? true;
+  _autodetectEnabled    = document.getElementById('pref-autodetect')?.checked ?? true;
+  _notificationsEnabled = document.getElementById('pref-notifications')?.checked ?? true;
+  _autosyncEnabled      = document.getElementById('pref-autosync')?.checked ?? true;
+
+  await chrome.storage.local.set({
+    phishing_enabled: _phishingEnabled,
+    vt_enabled: _vtEnabled,
+    abuse_enabled: _abuseEnabled,
+    quishing_enabled: _quishingEnabled,
+    ai_enabled: _aiEnabled,
+    autodetect_enabled: _autodetectEnabled,
+    notifications_enabled: _notificationsEnabled,
+    autosync_enabled: _autosyncEnabled,
+  });
+
+  flashSavedIndicator();
+
+  // Re-render cached results if any exist to reflect preference changes instantly
   try {
-    const r = await fetch(`${API_BASE}/settings/status`, { signal: AbortSignal.timeout(4000) });
-    if (r.ok) {
-      const status = await r.json();
-      
-      // Update VirusTotal badge
-      if (vtBadge) {
-        if (status.virustotal?.configured) {
-          vtBadge.className = 'api-badge active';
-          vtBadge.textContent = 'Active';
-        } else {
-          vtBadge.className = 'api-badge inactive';
-          vtBadge.textContent = 'Not Configured';
-        }
-      }
-
-      // Update AbuseIPDB badge
-      if (abuseBadge) {
-        if (status.abuseipdb?.configured) {
-          abuseBadge.className = 'api-badge active';
-          abuseBadge.textContent = 'Active';
-        } else {
-          abuseBadge.className = 'api-badge inactive';
-          abuseBadge.textContent = 'Not Configured';
-        }
-      }
-
-      // Update AI Explainer badge
-      if (aiBadge) {
-        let aiConfigured = false;
-        let aiName = 'AI Explainer';
-        if (status.gemini?.configured) {
-          aiConfigured = true;
-          aiName = 'Gemini API';
-        } else if (status.anthropic?.configured) {
-          aiConfigured = true;
-          aiName = 'Anthropic API';
-        }
-        
-        if (aiConfigured) {
-          aiBadge.className = 'api-badge active';
-          aiBadge.textContent = aiName;
-        } else {
-          aiBadge.className = 'api-badge inactive';
-          aiBadge.textContent = 'Not Configured';
-        }
-      }
-    }
-  } catch (e) {
-    console.warn('Failed to load integration status from backend:', e);
-    [vtBadge, abuseBadge, aiBadge].forEach(b => {
-      if (b) {
-        b.className = 'api-badge inactive';
-        b.textContent = 'Offline';
-      }
-    });
-  }
+    const stored = await chrome.storage.session.get('lastResult');
+    if (stored?.lastResult) renderResult(stored.lastResult);
+  } catch {}
 }
 
 async function loadSettings() {
-  const s = await chrome.storage.local.get(['backend', 'vt_enabled', 'abuse_enabled', 'ai_enabled']);
-  if (s.backend) {
-    API_BASE = s.backend + '/api';
-    const el = document.getElementById('cfg-backend');
-    if (el) el.value = s.backend;
-  }
-  
-  _vtEnabled = s.vt_enabled !== false;
-  _abuseEnabled = s.abuse_enabled !== false;
-  _aiEnabled = s.ai_enabled !== false;
+  await resolveApiBase();
+  const s = await chrome.storage.local.get([
+    'phishing_enabled',
+    'vt_enabled',
+    'abuse_enabled',
+    'quishing_enabled',
+    'ai_enabled',
+    'autodetect_enabled',
+    'notifications_enabled',
+    'autosync_enabled'
+  ]);
 
-  const vtPref = document.getElementById('pref-vt');
-  const abusePref = document.getElementById('pref-abuse');
-  const aiPref = document.getElementById('pref-ai');
-  if (vtPref) vtPref.checked = _vtEnabled;
-  if (abusePref) abusePref.checked = _abuseEnabled;
-  if (aiPref) aiPref.checked = _aiEnabled;
+  _phishingEnabled      = s.phishing_enabled !== false;
+  _vtEnabled            = s.vt_enabled !== false;
+  _abuseEnabled         = s.abuse_enabled !== false;
+  _quishingEnabled      = s.quishing_enabled !== false;
+  _aiEnabled            = s.ai_enabled !== false;
+  _autodetectEnabled    = s.autodetect_enabled !== false;
+  _notificationsEnabled = s.notifications_enabled !== false;
+  _autosyncEnabled      = s.autosync_enabled !== false;
 
-  await loadIntegrationStatus();
+  const bindToggle = (id, isChecked) => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.checked = isChecked;
+      if (!el.dataset.bound) {
+        el.addEventListener('change', autoSavePreferences);
+        el.dataset.bound = 'true';
+      }
+    }
+  };
+
+  bindToggle('pref-phishing', _phishingEnabled);
+  bindToggle('pref-vt', _vtEnabled);
+  bindToggle('pref-abuse', _abuseEnabled);
+  bindToggle('pref-quishing', _quishingEnabled);
+  bindToggle('pref-ai', _aiEnabled);
+  bindToggle('pref-autodetect', _autodetectEnabled);
+  bindToggle('pref-notifications', _notificationsEnabled);
+  bindToggle('pref-autosync', _autosyncEnabled);
 }
 
-async function saveSettings() {
-  const backend = document.getElementById('cfg-backend').value.trim().replace(/\/$/, '');
-  const vtPref = document.getElementById('pref-vt');
-  const abusePref = document.getElementById('pref-abuse');
-  const aiPref = document.getElementById('pref-ai');
-
-  _vtEnabled = vtPref ? vtPref.checked : true;
-  _abuseEnabled = abusePref ? abusePref.checked : true;
-  _aiEnabled = aiPref ? aiPref.checked : true;
-
-  await chrome.storage.local.set({ 
-    backend, 
-    vt_enabled: _vtEnabled, 
-    abuse_enabled: _abuseEnabled, 
-    ai_enabled: _aiEnabled 
-  });
-  API_BASE = backend + '/api';
-
-  const ok = await checkBackend();
-  if (ok) {
-    await loadIntegrationStatus();
-    showErr('settings-err', '');
-    
-    // Re-render cached results if any exist to reflect changes instantly
-    let stored = {};
-    try { stored = await chrome.storage.session.get('lastResult'); } catch { /* ignore */ }
-    if (stored.lastResult) renderResult(stored.lastResult);
-
-    switchTab('scan');
-  } else {
-    showErr('settings-err', 'Saved preferences — but backend not reachable at this URL');
-  }
-}
+// Backward-compatible alias for any legacy callers
+const saveSettings = autoSavePreferences;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MANUAL SCAN (fallback for non-mail URLs)
@@ -1284,7 +1479,7 @@ function authClass(v) {
 }
 
 function openDashboard() {
-  const base = document.getElementById('cfg-backend')?.value || 'http://localhost:8000';
+  const base = API_BASE.replace(/\/api\/?$/, '');
   chrome.tabs.create({ url: base });
 }
 

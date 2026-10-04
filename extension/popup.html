@@ -548,6 +548,7 @@
     body.light-theme .platform-steps,
     body.light-theme .scan-meta,
     body.light-theme .backend-status,
+    body.light-theme .settings-group-card,
     body.light-theme .setting-row {
       background: rgba(255, 255, 255, 0.65) !important;
       backdrop-filter: blur(20px) saturate(180%) !important;
@@ -645,9 +646,31 @@
 </div>
 
 <!-- Signed in user bar -->
-<div class="user-bar" id="ext-user-bar" style="display:none;align-items:center;justify-content:space-between;padding:7px 16px;background:rgba(255,255,255,0.03);border-bottom:1px solid var(--border);font-size:11px;color:var(--t2)">
-  <span>Signed in as <strong id="ext-user-email" style="color:var(--t1)"></strong></span>
-  <button id="btn-ext-signout" style="background:none;border:none;color:#f87171;cursor:pointer;font-size:11px;font-weight:600">Sign Out</button>
+<div class="user-bar" id="ext-user-bar" style="display:none;align-items:center;justify-content:space-between;padding:8px 14px;background:rgba(255,255,255,0.025);border-bottom:1px solid var(--border)">
+  <!-- Left: Clickable Profile Chip to view Account -->
+  <div id="btn-ext-profile" style="display:flex;align-items:center;gap:8px;cursor:pointer;min-width:0" title="Click to view Account details on dashboard">
+    <!-- Avatar -->
+    <div id="ext-user-avatar" style="width:24px;height:24px;border-radius:50%;background:linear-gradient(135deg,#3b82f6,#8b5cf6);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0;box-shadow:0 2px 6px rgba(59,130,246,0.3)">
+      U
+    </div>
+    <!-- Profile Info -->
+    <div style="display:flex;flex-direction:column;min-width:0">
+      <div style="display:flex;align-items:center;gap:4px">
+        <span id="ext-user-name" style="font-size:12px;font-weight:600;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px">User</span>
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color:var(--t3);flex-shrink:0"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/></svg>
+      </div>
+      <span style="font-size:9.5px;color:var(--green);font-weight:500;display:flex;align-items:center;gap:3px">
+        <span style="width:4px;height:4px;border-radius:50%;background:var(--green);display:inline-block"></span>
+        Protected Account
+      </span>
+    </div>
+  </div>
+
+  <!-- Right: Sign Out -->
+  <button id="btn-ext-signout" style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);color:#f87171;padding:3px 8px;border-radius:5px;cursor:pointer;font-size:10.5px;font-weight:600;display:flex;align-items:center;gap:4px;transition:all 0.2s">
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+    Sign Out
+  </button>
 </div>
 
 <!-- Anonymous trial bar -->
@@ -665,6 +688,17 @@
   <input class="setting-input" id="ext-auth-password" type="password" placeholder="Password" style="margin-bottom:14px;width:100%"/>
   <button class="btn btn-primary" id="ext-auth-btn" style="width:100%;justify-content:center">
     Sign In
+  </button>
+  
+  <div style="display:flex;align-items:center;gap:8px;margin:14px 0 12px">
+    <div style="flex:1;height:1px;background:var(--border)"></div>
+    <span style="font-size:10px;color:var(--t3);text-transform:uppercase;font-weight:600;letter-spacing:0.04em">or</span>
+    <div style="flex:1;height:1px;background:var(--border)"></div>
+  </div>
+
+  <button class="btn btn-secondary" id="btn-sync-web-session" style="width:100%;justify-content:center;font-size:11.5px;gap:6px">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+    Sync from Open Web App Tab
   </button>
 </div>
 
@@ -799,28 +833,40 @@
 
 <!-- ── Settings Tab ── -->
 <div class="panel" id="panel-settings">
-  <div class="backend-status" id="backend-status">
-    <div class="bs-dot bs-offline" id="bs-dot"></div>
-    <span id="bs-text">Checking backend…</span>
-  </div>
-  <div class="setting-row">
-    <div class="setting-label">Backend URL</div>
-    <input class="setting-input" id="cfg-backend" value="http://localhost:8000" placeholder="http://localhost:8000"/>
-    <div class="setting-hint">Where your FastAPI server is running</div>
-  </div>
-  <div style="margin-top: 14px; margin-bottom: 6px;">
-    <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--t3); margin-bottom: 8px;">
-      Integrations
+  <!-- Gateway & Live Protection Status -->
+  <div class="backend-status" id="backend-status" style="margin-bottom:14px;padding:9px 12px;display:flex;align-items:center;justify-content:space-between">
+    <div style="display:flex;align-items:center;gap:7px">
+      <div class="bs-dot bs-offline" id="bs-dot"></div>
+      <span id="bs-text" style="font-weight:600;font-size:12px">Checking backend…</span>
     </div>
-    <div id="integrations-list">
-      <!-- VirusTotal Toggle -->
+    <span id="settings-save-pill" style="font-size:9.5px;color:var(--green);font-weight:700;letter-spacing:0.05em;opacity:0;transition:opacity 0.25s">SAVED ✓</span>
+  </div>
+
+  <!-- Group 1: Threat Protection Modules -->
+  <div style="margin-bottom:14px">
+    <div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--t3);margin-bottom:7px;display:flex;align-items:center;gap:5px">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      Threat Protection Modules
+    </div>
+    <div class="settings-group-card" style="background:var(--card-bg);border:1px solid var(--border);border-radius:10px;padding:2px 12px">
+      
+      <!-- Phishing & Spoofing Defense -->
       <div class="switch-container">
         <div class="switch-details">
-          <div class="switch-title">
-            VirusTotal API
-            <span class="api-badge inactive" id="vt-api-badge">Checking...</span>
-          </div>
-          <div class="switch-desc">Scans URLs and attachment hashes</div>
+          <div class="switch-title">Phishing & Spoofing Defense</div>
+          <div class="switch-desc">Inspects headers, SPF, DKIM, DMARC & domain spoofing</div>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="pref-phishing" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <!-- Malicious Link & URL Shield -->
+      <div class="switch-container">
+        <div class="switch-details">
+          <div class="switch-title">Malicious Link & URL Shield</div>
+          <div class="switch-desc">Scans shortened links, homoglyphs, typosquatting & VT intel</div>
         </div>
         <label class="switch">
           <input type="checkbox" id="pref-vt" checked>
@@ -828,14 +874,11 @@
         </label>
       </div>
 
-      <!-- AbuseIPDB Toggle -->
+      <!-- Sender IP & Infrastructure Reputation -->
       <div class="switch-container">
         <div class="switch-details">
-          <div class="switch-title">
-            AbuseIPDB API
-            <span class="api-badge inactive" id="abuse-api-badge">Checking...</span>
-          </div>
-          <div class="switch-desc">Checks sender IP reputation</div>
+          <div class="switch-title">Sender IP & Reputation Shield</div>
+          <div class="switch-desc">Analyzes sending MTA reputation & network hop routes</div>
         </div>
         <label class="switch">
           <input type="checkbox" id="pref-abuse" checked>
@@ -843,26 +886,101 @@
         </label>
       </div>
 
-      <!-- AI Explainer Toggle -->
+      <!-- Quishing / QR Code Detector -->
       <div class="switch-container">
         <div class="switch-details">
-          <div class="switch-title">
-            AI Explainer API
-            <span class="api-badge inactive" id="ai-api-badge">Checking...</span>
-          </div>
-          <div class="switch-desc">Provides threat summaries and advice</div>
+          <div class="switch-title">Quishing / QR Code Protection</div>
+          <div class="switch-desc">Decodes & inspects embedded QR code evasion payloads</div>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="pref-quishing" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <!-- AI Threat Explainer & Advice -->
+      <div class="switch-container">
+        <div class="switch-details">
+          <div class="switch-title">AI Threat Explainer & Advice</div>
+          <div class="switch-desc">Generates plain-English security guidance & SOC advice</div>
         </div>
         <label class="switch">
           <input type="checkbox" id="pref-ai" checked>
           <span class="slider"></span>
         </label>
       </div>
+
     </div>
   </div>
-  <div style="margin-top:12px;display:flex;gap:8px">
-    <button class="btn btn-primary" id="btn-save-settings" style="flex:1">Save Settings</button>
-    <button class="btn btn-secondary btn-sm" id="btn-test-backend">Test</button>
+
+  <!-- Group 2: Workflow & Automation -->
+  <div style="margin-bottom:14px">
+    <div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--t3);margin-bottom:7px;display:flex;align-items:center;gap:5px">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+      Workflow & Automation
+    </div>
+    <div class="settings-group-card" style="background:var(--card-bg);border:1px solid var(--border);border-radius:10px;padding:2px 12px">
+      
+      <!-- Auto-Detect Active Email -->
+      <div class="switch-container">
+        <div class="switch-details">
+          <div class="switch-title">Auto-Detect Active Email</div>
+          <div class="switch-desc">Prepares scan immediately when Gmail or Outlook is open</div>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="pref-autodetect" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <!-- Desktop Notifications -->
+      <div class="switch-container">
+        <div class="switch-details">
+          <div class="switch-title">Desktop Threat Alerts</div>
+          <div class="switch-desc">Instant system notifications for high & critical threats</div>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="pref-notifications" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <!-- Cloud SOC Sync -->
+      <div class="switch-container">
+        <div class="switch-details">
+          <div class="switch-title">Auto-Sync Forensics to Cloud</div>
+          <div class="switch-desc">Automatically logs scan reports to your SOC dashboard</div>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="pref-autosync" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+
+    </div>
   </div>
+
+  <!-- Group 3: System & Engine Telemetry -->
+  <div style="margin-bottom:10px">
+    <div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:var(--t3);margin-bottom:7px;display:flex;align-items:center;gap:5px">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+      Engine & Intelligence Telemetry
+    </div>
+    <div class="settings-group-card" style="background:var(--card-bg);border:1px solid var(--border);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:7px;font-size:11.5px">
+      <div style="display:flex;justify-content:space-between;color:var(--t2)">
+        <span>Analysis Engine</span>
+        <span style="color:var(--t1);font-weight:600;font-family:monospace">SecureMail v4.0 (Hybrid)</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;color:var(--t2)">
+        <span>Threat Vault IOC DB</span>
+        <span style="color:var(--green);font-weight:600;display:flex;align-items:center;gap:4px">
+          <span style="width:6px;height:6px;border-radius:50%;background:var(--green);display:inline-block"></span>
+          Live Synced
+        </span>
+      </div>
+    </div>
+  </div>
+
   <div class="err" id="settings-err"></div>
 </div>
 

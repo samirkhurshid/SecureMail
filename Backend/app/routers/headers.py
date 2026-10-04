@@ -6,7 +6,7 @@ GET  /api/headers/ip-reputation  — Quick IP reputation check (used by frontend
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
-from app.services import email_parser, abuseipdb, risk_scorer
+from app.services import email_parser, abuseipdb, risk_scorer, dns_auth_service
 from app.utils.logger import setup_logger
 
 logger = setup_logger(__name__)
@@ -37,6 +37,13 @@ async def analyze_headers(request: HeaderAnalysisRequest):
 
     if headers.get("dkim_signature") and auth.get("dkim") == "unknown":
         auth["dkim"] = "present_unverified"
+
+    sender_domain = headers.get("from_domain", "")
+    if sender_domain and (auth.get("spf") in ("unknown", None) or auth.get("dmarc") in ("unknown", None)):
+        dns_auth = await dns_auth_service.verify_domain_dns_auth(sender_domain)
+        for k, v in dns_auth.items():
+            if auth.get(k) in ("unknown", None) and v != "unknown":
+                auth[k] = v
 
     # ── IP reputation lookup ──────────────────────────────────────
     originating_ip = headers.get("originating_ip") or headers.get("x_originating_ip")

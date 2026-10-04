@@ -85,7 +85,7 @@ def test_high_abuse_tld_escalation():
 
 
 def test_clean_official_domains():
-    """Verify official enterprise domains produce zero false positives."""
+    """Verify official enterprise domains and cloud infrastructure produce zero false positives."""
     clean_domains = [
         "paypal.com",
         "google.com",
@@ -95,6 +95,13 @@ def test_clean_official_domains():
         "chase.com",
         "netflix.com",
         "dhl.com",
+        # Cloud infrastructure & CDN subdomains
+        "notification-ms-static.s3.amazonaws.com",
+        "fonts.googleapis.com",
+        "calyx-production-media.s3.amazonaws.com",
+        "assets.github.io",
+        "cdnjs.cloudflare.com",
+        "portal.azure.com",
     ]
     for d in clean_domains:
         res = evaluate_domain_homograph(d)
@@ -104,14 +111,25 @@ def test_clean_official_domains():
         assert len(res["threat_indicators"]) == 0
 
 
+def test_leetspeak_typosquatting_detection():
+    """Verify leetspeak like p4ypal.com is flagged as typosquatting."""
+    res = evaluate_domain_homograph("p4ypal.com")
+    assert res["is_lookalike"] is True
+    assert res["spoofed_brand"] == "paypal"
+    assert "leetspeak_typosquat" in res["attack_vectors"]
+
+
 def test_analyze_urls_enrichment():
     """Verify URL list is enriched with homograph analysis node."""
     sample_urls = [
         {"url": "https://xn--gogle-pra.com/signin", "domain": "xn--gogle-pra.com"},
         {"url": "https://www.google.com/search?q=test", "domain": "google.com"},
+        {"url": "https://notification-ms-static.s3.amazonaws.com/img.png", "domain": "notification-ms-static.s3.amazonaws.com"},
     ]
     enriched = analyze_urls_for_homographs(sample_urls)
-    assert len(enriched) == 2
+    assert len(enriched) == 3
     assert enriched[0]["is_lookalike"] is True
     assert enriched[0]["spoofed_brand"] == "google"
     assert enriched[1]["is_lookalike"] is False
+    assert enriched[2]["is_lookalike"] is False
+

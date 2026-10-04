@@ -5,7 +5,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=(".env", "Backend/.env", "../Backend/.env"),
         env_file_encoding="utf-8",
         case_sensitive=True,
         extra="ignore",
@@ -54,7 +54,8 @@ class Settings(BaseSettings):
     FORENSICS_LOG_DIR: str = Field(default="./forensics_logs")
     FORENSICS_MAX_LOGS: int = Field(default=10000, ge=1)
 
-    # ── Authentication (Firebase) ────────────────────────────────
+    # ── Authentication (Firebase & RBAC) ─────────────────────────
+    ADMIN_EMAIL: str = Field(default="")
     FIREBASE_SERVICE_ACCOUNT_PATH: str = Field(default="./firebase-service-account.json")
     FIREBASE_WEB_API_KEY: str = Field(default="")
     FIREBASE_AUTH_DOMAIN: str = Field(default="mail-31dbb.firebaseapp.com")
