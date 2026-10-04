@@ -3026,7 +3026,7 @@ function threatIcon(type,sev){
 // ── Dashboard ─────────────────────────────────
 async function loadDashboard() {
   try {
-    const [statsR, logsR] = await Promise.all([apiFetch(`${API}/forensics/stats`), apiFetch(`${API}/forensics/?limit=50`)]);
+    const [statsR, logsR] = await Promise.all([apiFetch(`${API}/forensics/stats`), apiFetch(`${API}/forensics?limit=50`)]);
     if (!statsR.ok || !logsR.ok) return;
     const stats = await statsR.json();
     const logsData = await logsR.json();
@@ -3448,7 +3448,7 @@ async function loadThreatFeed(){
     return;
   }
   try{
-    const r=await apiFetch(`${API}/forensics/?limit=100`);
+    const r=await apiFetch(`${API}/forensics?limit=100`);
     if (!r.ok) return;
     const d=await r.json();
     const logs=(d.logs||[]).filter(l=>['critical','high','medium'].includes(l.risk_level)).slice(0,8);
@@ -4356,14 +4356,19 @@ let _allLogs=[],_fPage=1;const PAGE=15;
 
 async function loadForensics(){
   try{
-    const [lr,sr]=await Promise.all([apiFetch(`${API}/forensics/?limit=1000`),apiFetch(`${API}/forensics/stats`)]);
-    const ld=await lr.json();const stats=await sr.json();
+    const [lr,sr]=await Promise.all([apiFetch(`${API}/forensics?limit=1000`),apiFetch(`${API}/forensics/stats`)]);
+    if (!lr.ok) {
+      const err = await lr.json().catch(() => ({}));
+      throw new Error(err.detail || `Server status ${lr.status}`);
+    }
+    const ld=await lr.json();
+    const stats= sr.ok ? (await sr.json().catch(()=>({}))) : {};
     _allLogs=(ld.logs||[]).map(l=>({...l, sender_email:l.sender_email||l.sender||''}));
-    document.getElementById('f-total').textContent=stats.total??0;
+    document.getElementById('f-total').textContent=stats.total??_allLogs.length;
     const brl=stats.by_risk_level||{};
-    document.getElementById('f-crit').textContent=brl.critical??0;
-    document.getElementById('f-high').textContent=brl.high??0;
-    document.getElementById('f-clean').textContent=brl.clean??0;
+    document.getElementById('f-crit').textContent=brl.critical??_allLogs.filter(l=>l.risk_level==='critical').length;
+    document.getElementById('f-high').textContent=brl.high??_allLogs.filter(l=>l.risk_level==='high').length;
+    document.getElementById('f-clean').textContent=brl.clean??_allLogs.filter(l=>l.risk_level==='clean').length;
     renderLogs(_allLogs,1);
   }catch(e){toast('Failed to load logs: '+e.message,'error')}
 }

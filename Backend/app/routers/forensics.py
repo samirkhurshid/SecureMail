@@ -8,6 +8,7 @@ from app.auth import get_current_user, CurrentUser
 
 router = APIRouter()
 
+@router.get("")
 @router.get("/")
 async def list_logs(
     limit: int = Query(50, ge=1),
