@@ -1,0 +1,14 @@
+# Ignore Backend from Vercel deployment so Vercel treats the project as a pure static frontend
+Backend/
+Documents/
+extension/
+latex_report/
+paper_assets/
+documents_extracted_images/
+*.py
+*.pdf
+*.docx
+*.zip
+*.pfa
+*.db
+*.sqlite
