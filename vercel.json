@@ -1,8 +1,9 @@
 {
-  "version": 2,
-  "buildCommand": null,
-  "outputDirectory": "Frontend",
   "cleanUrls": true,
+  "rewrites": [
+    { "source": "/", "destination": "/Frontend/index.html" },
+    { "source": "/(.*)", "destination": "/Frontend/$1" }
+  ],
   "headers": [
     {
       "source": "/(.*)",
